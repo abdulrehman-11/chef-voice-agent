@@ -1,0 +1,30 @@
+# Core LiveKit Agent Dependencies
+livekit-agents==1.3.10
+livekit-plugins-deepgram==1.3.10
+livekit-plugins-cartesia==1.3.10
+livekit-plugins-groq==1.3.10
+livekit-plugins-noise-cancellation==0.2.5
+
+# Web Server for Token Generation
+quart==0.20.0
+quart-cors==0.8.0
+flask==3.1.2
+
+# Database
+psycopg2-binary==2.9.10
+python-dotenv==1.0.1
+
+# Google Sheets Integration
+google-api-python-client==2.108.0
+google-auth==2.25.2
+google-auth-httplib2==0.2.0
+google-auth-oauthlib==1.2.0
+gspread==6.5.1
+
+# Utilities
+tenacity==9.1.2
+pydantic==2.12.5
+
+# Optional: Development tools
+rich==14.2.0
+watchfiles==1.1.1
