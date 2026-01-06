@@ -4,7 +4,7 @@
  */
 
 // Configuration
-const TOKEN_SERVER_URL = 'http://localhost:5000/get-token';
+const TOKEN_SERVER_URL = 'https://chef-voice-agent-production.up.railway.app/get-token';
 const LIVEKIT_URL = 'wss://chef-live-voice-agent-n6istvo9.livekit.cloud';
 
 // State
