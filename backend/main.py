@@ -491,6 +491,8 @@ async def chef_agent(ctx: agents.JobContext):
 
 def run_agent_production():
     """Run agent in production mode (for Railway)"""
+    import sys
+    
     required_vars = ['LIVEKIT_URL', 'LIVEKIT_API_KEY', 'LIVEKIT_API_SECRET',
                      'DEEPGRAM_API_KEY', 'CARTESIA_API_KEY', 'GROQ_API_KEY', 'DATABASE_URL']
     
@@ -510,8 +512,10 @@ def run_agent_production():
     logger.info("Noise Cancellation: BVC")
     logger.info("Agent ready - waiting for connections...")
     
-    # Run the agent server
+    # Inject 'start' command for CLI
+    sys.argv = ['main.py', 'start']
     agents.cli.run_app(server)
+
 
 
 if __name__ == "__main__":
