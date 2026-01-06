@@ -14,7 +14,6 @@ from dotenv import load_dotenv
 from livekit import agents, rtc
 from livekit.agents import AgentServer, AgentSession, Agent, AutoSubscribe, RunContext, function_tool, room_io
 from livekit.plugins import deepgram, cartesia, silero, groq, noise_cancellation
-from livekit.plugins.turn_detector.multilingual import MultilingualModel
 
 import database as db
 import google_sheets
