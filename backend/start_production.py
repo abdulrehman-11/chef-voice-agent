@@ -1,47 +1,40 @@
 """
 Production entrypoint for Railway deployment
-Runs both token_server and LiveKit agent
+Runs token server and LiveKit agent together
 """
 import os
 import sys
-import subprocess
-import signal
 from pathlib import Path
 
 # Add current directory to Python path
 sys.path.insert(0, str(Path(__file__).parent))
 
-def run_production():
-    """Run both services for production"""
+if __name__ == "__main__":
     import logging
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger(__name__)
     
-    # Import token server
-    from token_server import app as token_app
-    
-    # Import LiveKit agent main
-    import main
-    
-    # Get port from Railway environment
+    # Get port from Railway
     port = int(os.getenv('PORT', 5000))
     
-    logger.info(f"🚀 Starting Chef AI Voice Agent on port {port}")
-    logger.info("📡 Token Server: Enabled")
-    logger.info("🎙️ LiveKit Agent: Starting...")
+    logger.info("=" * 60)
+    logger.info("🚀 Chef Voice AI Agent - Production")
+    logger.info("=" * 60)
+    logger.info(f"Token Server Port: {port}")
     
     # Start token server in background thread
+    from token_server import app
     import threading
+    
     def run_token_server():
-        token_app.run(host='0.0.0.0', port=port)
+        app.run(host='0.0.0.0', port=port, debug=False)
     
-    t = threading.Thread(target=run_token_server, daemon=True)
-    t.start()
+    token_thread = threading.Thread(target=run_token_server, daemon=True)
+    token_thread.start()
     
-    logger.info(f"✅ Token server listening on 0.0.0.0:{port}")
+    logger.info(f"✅ Token server started on port {port}")
+    logger.info("🎙️ Starting LiveKit agent...")
     
-    # Run LiveKit agent (blocks)
-    main.run_agent_production()
-
-if __name__ == "__main__":
-    run_production()
+    # Import and run main agent
+    from main import run_agent_production
+    run_agent_production()
