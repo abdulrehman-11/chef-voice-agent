@@ -457,7 +457,6 @@ async def chef_agent(ctx: agents.JobContext):
         llm=groq.LLM(model=groq_model, temperature=0.3),
         tts=cartesia.TTS(voice="d46abd1d-2d02-43e8-819f-51fb652c1c61"),  # Newsman voice
         vad=silero.VAD.load(),
-        turn_detection=MultilingualModel(),
     )
     
     # Start session with noise cancellation to prevent echo
