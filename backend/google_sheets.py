@@ -53,27 +53,48 @@ class GoogleSheetsClient:
     def init(self) -> bool:
         """Initialize the Google Sheets client"""
         try:
-            # Get credentials file path
-            creds_file = os.getenv('GOOGLE_SHEETS_CREDENTIALS')
+            # Get credentials file path or JSON content
+            creds_env = os.getenv('GOOGLE_SHEETS_CREDENTIALS')
             spreadsheet_id = os.getenv('GOOGLE_SHEETS_SPREADSHEET_ID')
             
-            if not creds_file or not spreadsheet_id:
+            if not creds_env or not spreadsheet_id:
                 logger.warning("Google Sheets not configured - missing environment variables")
                 return False
             
-            # Build full path to credentials file
-            backend_dir = Path(__file__).parent
-            creds_path = backend_dir / creds_file
+            # Check if it's a JSON string or file path
+            import json
             
-            if not creds_path.exists():
-                logger.warning(f"Google Sheets credentials file not found: {creds_path}")
-                return False
-            
-            # Authenticate
-            credentials = Credentials.from_service_account_file(
-                str(creds_path),
-                scopes=SCOPES
-            )
+            if creds_env.strip().startswith('{'):
+                # It's JSON content - parse it directly
+                try:
+                    import tempfile
+                    creds_info = json.loads(creds_env)
+                    
+                    # Create credentials from dict
+                    credentials = Credentials.from_service_account_info(
+                        creds_info,
+                        scopes=SCOPES
+                    )
+                    logger.info("📋 Using JSON credentials from environment variable")
+                    
+                except json.JSONDecodeError as e:
+                    logger.error(f"Failed to parse GOOGLE_SHEETS_CREDENTIALS as JSON: {e}")
+                    return False
+            else:
+                # It's a file path - load from file
+                backend_dir = Path(__file__).parent
+                creds_path = backend_dir / creds_env
+                
+                if not creds_path.exists():
+                    logger.warning(f"Google Sheets credentials file not found: {creds_path}")
+                    return False
+                
+                # Authenticate from file
+                credentials = Credentials.from_service_account_file(
+                    str(creds_path),
+                    scopes=SCOPES
+                )
+                logger.info(f"📄 Using credentials from file: {creds_path}")
             
             self.client = gspread.authorize(credentials)
             self.spreadsheet = self.client.open_by_key(spreadsheet_id)
@@ -82,7 +103,7 @@ class GoogleSheetsClient:
             self._setup_tabs()
             
             self.initialized = True
-            logger.info("✅ Google Sheets client initialized successfully")
+            logger.info("📊 Google Sheets initialized")
             return True
             
         except Exception as e:
