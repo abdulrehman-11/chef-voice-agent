@@ -89,6 +89,57 @@ def close_connection(conn):
             pass
 
 
+# ==================== HELPER FUNCTIONS ====================
+
+def _get_unique_recipe_name(cur, chef_id: str, name: str, recipe_type: str) -> str:
+    """
+    Check if recipe name exists and return unique version if needed.
+    If 'Tomato Sauce' exists, returns 'Tomato Sauce 2', then 'Tomato Sauce 3', etc.
+    
+    Args:
+        cur: Database cursor
+        chef_id: Chef ID
+        name: Desired recipe name
+        recipe_type: 'batch' or 'plate'
+    
+    Returns:
+        Unique name (original or versioned)
+    """
+    table = 'batch_recipes' if recipe_type == 'batch' else 'plate_recipes'
+    base_name = name.strip()
+    
+    # Check if base name exists
+    cur.execute(f"""
+        SELECT name FROM {table}
+        WHERE chef_id = %s AND LOWER(name) = LOWER(%s)
+    """, (chef_id, base_name))
+    
+    if not cur.fetchone():
+        return base_name  # Name is unique, use it as-is
+    
+    # Name exists, find next available version number
+    logger.info(f"Recipe '{base_name}' already exists, finding unique version...")
+    
+    version = 2
+    while version < 100:  # Safety limit
+        versioned_name = f"{base_name} {version}"
+        cur.execute(f"""
+            SELECT name FROM {table}
+            WHERE chef_id = %s AND LOWER(name) = LOWER(%s)
+        """, (chef_id, versioned_name))
+        
+        if not cur.fetchone():
+            logger.info(f"✅ Using versioned name: '{versioned_name}'")
+            return versioned_name
+        
+        version += 1
+    
+    # If we somehow hit 100 versions, add timestamp
+    import time
+    timestamp = int(time.time())
+    return f"{base_name} {timestamp}"
+
+
 # ==================== BATCH RECIPES ====================
 
 def save_batch_recipe(
@@ -114,6 +165,12 @@ def save_batch_recipe(
     conn = get_connection()
     try:
         cur = conn.cursor(cursor_factory=RealDictCursor)
+        
+        # Check for duplicate name and get unique version if needed
+        unique_name = _get_unique_recipe_name(cur, chef_id, name, 'batch')
+        if unique_name != name:
+            logger.info(f"📝 Recipe name '{name}' already exists, using '{unique_name}' instead")
+            name = unique_name  # Use the versioned name
         
         # Insert batch recipe
         cur.execute("""
@@ -206,6 +263,12 @@ def save_plate_recipe(
     conn = get_connection()
     try:
         cur = conn.cursor(cursor_factory=RealDictCursor)
+        
+        # Check for duplicate name and get unique version if needed
+        unique_name = _get_unique_recipe_name(cur, chef_id, name, 'plate')
+        if unique_name != name:
+            logger.info(f"📝 Recipe name '{name}' already exists, using '{unique_name}' instead")
+            name = unique_name  # Use the versioned name
         
         # Insert plate recipe
         cur.execute("""

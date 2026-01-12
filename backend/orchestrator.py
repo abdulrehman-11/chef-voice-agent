@@ -323,6 +323,7 @@ class ConversationOrchestrator:
                 presentation_notes=args.get("presentation_notes"),
                 category=args.get("category"),
                 cuisine=args.get("cuisine"),
+                batch_recipes=args.get("batch_recipes"),  # ✅ FIX: Pass batch recipes!
                 ingredients=args.get("ingredients"),
                 is_complete=True
             )
