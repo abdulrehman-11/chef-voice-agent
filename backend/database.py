@@ -140,6 +140,41 @@ def _get_unique_recipe_name(cur, chef_id: str, name: str, recipe_type: str) -> s
     return f"{base_name} {timestamp}"
 
 
+def check_recipe_exists(chef_id: str, name: str, recipe_type: str) -> Optional[Dict]:
+    """
+    Check if a recipe with this name already exists.
+    Used for interactive duplicate detection.
+    
+    Args:
+        chef_id: Chef ID
+        name: Recipe name to check
+        recipe_type: 'batch' or 'plate'
+    
+    Returns:
+        Recipe details dict if found, None otherwise
+    """
+    conn = get_connection()
+    try:
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        table = 'batch_recipes' if recipe_type == 'batch' else 'plate_recipes'
+        
+        cur.execute(f"""
+            SELECT id, name, description, created_at
+            FROM {table}
+            WHERE chef_id = %s AND LOWER(name) = LOWER(%s)
+            LIMIT 1
+        """, (chef_id, name.strip()))
+        
+        result = cur.fetchone()
+        if result:
+            return dict(result)
+        return None
+        
+    finally:
+        cur.close()
+        return_connection(conn)
+
+
 # ==================== BATCH RECIPES ====================
 
 def save_batch_recipe(
