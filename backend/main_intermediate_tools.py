@@ -1,0 +1,242 @@
+    @function_tool()
+    async def start_recipe(
+        self,
+        context: RunContext,
+        name: str,
+        recipe_type: str,
+        description: str = ""
+    ) -> str:
+        """Start building a new recipe in real-time.
+        
+        Call this function AS SOON AS the chef mentions they're making a recipe.
+        This initializes the recipe and shows it in the live recipe builder UI.
+        
+        Args:
+            name: Name of the recipe (e.g., "Chicken Biryani")
+            recipe_type: Type of recipe - must be either "plate" or "batch"
+            description: Optional brief description of the dish
+            
+        Returns:
+            Confirmation message
+        """
+        try:
+            logger.info(f"🆕 STARTING RECIPE: {name} ({recipe_type})")
+            
+            # Initialize/reset current recipe state
+            self._current_recipe = {
+                'name': name,
+                'recipe_type': recipe_type.lower(),
+                'description': description,
+                'serves': None,
+                'yield_quantity': None,
+                'yield_unit': None,
+                'cuisine': '',
+                'category': '',
+                'temperature': None,
+                'temperature_unit': 'C',
+                'ingredients': [],
+                'instructions': [],
+                'plating_instructions': '',
+                'presentation_notes': '',
+            }
+            
+            # Send recipe_start event to frontend
+            await self.send_recipe_event("recipe_start", {
+                "recipe_type": recipe_type.lower(),
+                "name": name,
+                "description": description
+            })
+            
+            return f"Got it! Starting to build {name}. I'll track the details as you describe them."
+            
+        except Exception as e:
+            logger.error(f"Error starting recipe: {e}", exc_info=True)
+            return f"I had trouble starting the recipe. Could you try again?"
+
+    @function_tool()
+    async def update_recipe_metadata(
+        self,
+        context: RunContext,
+        serves: int = None,
+        yield_quantity: float = None,
+        yield_unit: str = None,
+        cuisine: str = None,
+        category: str = None,
+        temperature: float = None,
+        temperature_unit: str = None,
+        description: str = None
+    ) -> str:
+        """Update metadata for the recipe currently being built.
+        
+        Call this when the chef mentions serves, yield, cuisine, category, etc.
+        Can be called multiple times to update different fields.
+        
+        Args:
+            serves: Number of servings (for plate recipes)
+            yield_quantity: Amount yielded (for batch recipes)
+            yield_unit: Unit of yield (kg, liters, etc.)
+            cuisine: Type of cuisine (Indian, Italian, etc.)
+            category: Category (appetizer, main, dessert, etc.)
+            temperature: Cooking/storage temperature
+            temperature_unit: C or F
+            description: Description of the dish
+            
+        Returns:
+            Confirmation message
+        """
+        try:
+            if not self._current_recipe.get('name'):
+                return "No recipe in progress. Please start a recipe first by saying what you're making."
+            
+            # Update state
+            updates = {}
+            if serves is not None:
+                self._current_recipe['serves'] = serves
+                updates['serves'] = serves
+            if yield_quantity is not None:
+                self._current_recipe['yield_quantity'] = yield_quantity
+                updates['yield_quantity'] = yield_quantity
+            if yield_unit:
+                self._current_recipe['yield_unit'] = yield_unit
+                updates['yield_unit'] = yield_unit
+            if cuisine:
+                self._current_recipe['cuisine'] = cuisine
+                updates['cuisine'] = cuisine
+            if category:
+                self._current_recipe['category'] = category
+                updates['category'] = category
+            if temperature is not None:
+                self._current_recipe['temperature'] = temperature
+                updates['temperature'] = temperature
+            if temperature_unit:
+                self._current_recipe['temperature_unit'] = temperature_unit
+                updates['temperature_unit'] = temperature_unit
+            if description:
+                self._current_recipe['description'] = description
+                updates['description'] = description
+            
+            logger.info(f"📝 UPDATED METADATA: {updates}")
+            
+            # Send metadata update event
+            await self.send_recipe_event("recipe_metadata_update", {
+                "recipe_type": self._current_recipe['recipe_type'],
+                "name": self._current_recipe['name'],
+                **updates
+            })
+            
+            # Build response mentioning what was updated
+            updated_fields = [f"{k}: {v}" for k, v in updates.items()]
+            return f"Noted: {', '.join(updated_fields)}"
+            
+        except Exception as e:
+            logger.error(f"Error updating metadata: {e}", exc_info=True)
+            return "I had trouble updating that information."
+
+    @function_tool()
+    async def add_ingredient(
+        self,
+        context: RunContext,
+        name: str,
+        quantity: str = "",
+        unit: str = ""
+    ) -> str:
+        """Add a single ingredient to the current recipe.
+        
+        IMPORTANT: Call this function ONCE for EACH ingredient mentioned.
+        If the chef says "500g chicken, 300g rice, 2 onions" you should call this
+        function THREE separate times (once for chicken, once for rice, once for onions).
+        
+        Args:
+            name: Name of the ingredient (e.g., "chicken", "rice", "onions")
+            quantity: Amount (e.g., "500", "2", "1/2")
+            unit: Unit of measurement (e.g., "g", "kg", "cups", "tablespoons")
+            
+        Returns:
+            Confirmation message
+        """
+        try:
+            if not self._current_recipe.get('name'):
+                return "No recipe in progress. Please start a recipe first."
+            
+            ingredient = {
+                'name': name,
+                'quantity': quantity,
+                'unit': unit
+            }
+            
+            self._current_recipe['ingredients'].append(ingredient)
+            
+            logger.info(f"🥗 ADDED INGREDIENT: {quantity} {unit} {name}")
+            
+            # Send ingredient add event
+            await self.send_recipe_event("ingredient_add", {
+                "recipe_type": self._current_recipe['recipe_type'],
+                "name": self._current_recipe['name'],
+                "ingredient": ingredient,
+                "total_ingredients": len(self._current_recipe['ingredients'])
+            })
+            
+            return f"Added {quantity} {unit} {name}"
+            
+        except Exception as e:
+            logger.error(f"Error adding ingredient: {e}", exc_info=True)
+            return "I had trouble adding that ingredient."
+
+    @function_tool()
+    async def add_instruction(
+        self,
+        context: RunContext,
+        instruction: str
+    ) -> str:
+        """Add a cooking instruction or step to the current recipe.
+        
+        Call this when the chef describes cooking steps, techniques, or notes.
+        Can be called multiple times for different steps.
+        
+        Args:
+            instruction: The instruction text (e.g., "Marinate for 30 minutes")
+            
+        Returns:
+            Confirmation message
+        """
+        try:
+            if not self._current_recipe.get('name'):
+                return "No recipe in progress. Please start a recipe first."
+            
+            self._current_recipe['instructions'].append(instruction)
+            
+            logger.info(f"📋 ADDED INSTRUCTION: {instruction[:50]}...")
+            
+            # Send instruction add event
+            await self.send_recipe_event("instruction_add", {
+                "recipe_type": self._current_recipe['recipe_type'],
+                "name": self._current_recipe['name'],
+                "instruction": instruction,
+                "total_instructions": len(self._current_recipe['instructions'])
+            })
+            
+            return f"Noted: {instruction}"
+            
+        except Exception as e:
+            logger.error(f"Error adding instruction: {e}", exc_info=True)
+            return "I had trouble adding that instruction."
+
+    def clear_current_recipe(self):
+        """Clear the current recipe state after saving"""
+        self._current_recipe = {
+            'name': None,
+            'recipe_type': None,
+            'description': '',
+            'serves': None,
+            'yield_quantity': None,
+            'yield_unit': None,
+            'cuisine': '',
+            'category': '',
+            'temperature': None,
+            'temperature_unit': 'C',
+            'ingredients': [],
+            'instructions': [],
+            'plating_instructions': '',
+            'presentation_notes': '',
+        }
+        logger.info("🧹 Cleared current recipe state")

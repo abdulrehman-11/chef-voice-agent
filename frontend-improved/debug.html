@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Event Debug Console</title>
+    <style>
+        body {
+            background: #0A0A0A;
+            color: #FFF;
+            font-family: 'Courier New', monospace;
+            padding: 20px;
+        }
+
+        h1 {
+            color: #FF6B35;
+        }
+
+        .log-entry {
+            background: #1A1A1A;
+            border-left: 3px solid #FF6B35;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+
+        .timestamp {
+            color: #808080;
+            font-size: 0.9em;
+        }
+
+        .event-type {
+            color: #F39C12;
+            font-weight: bold;
+        }
+
+        .success {
+            border-left-color: #28A745;
+        }
+
+        .error {
+            border-left-color: #DC3545;
+        }
+
+        pre {
+            background: #000;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>🔍 Live Event Debug Console</h1>
+    <p>This page shows ALL LiveKit data channel events in real-time.</p>
+    <button id="clearBtn"
+        style="padding: 10px 20px; background: #FF6B35; color: white; border: none; border-radius: 4px; cursor: pointer;">Clear
+        Logs</button>
+    <div id="logs"></div>
+
+    <script>
+        const logsContainer = document.getElementById('logs');
+        const clearBtn = document.getElementById('clearBtn');
+
+        clearBtn.onclick = () => {
+            logsContainer.innerHTML = '';
+        };
+
+        function addLog(message, type = 'info', data = null) {
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+
+            const timestamp = new Date().toLocaleTimeString();
+            let html = `<span class="timestamp">[${timestamp}]</span> ${message}`;
+
+            if (data) {
+                html += `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+            }
+
+            entry.innerHTML = html;
+            logsContainer.insertBefore(entry, logsContainer.firstChild);
+        }
+
+        // Test if browser has necessary APIs
+        if (window.LiveKit) {
+            addLog('✅ LiveKit SDK found', 'success');
+        } else {
+            addLog('❌ LiveKit SDK NOT found', 'error');
+        }
+
+        if (window.RecipeBuilder) {
+            addLog('✅ RecipeBuilder module loaded', 'success');
+        } else {
+            addLog('❌ RecipeBuilder module NOT loaded', 'error');
+        }
+
+        // Override console.log to capture debug messages
+        const originalLog = console.log;
+        console.log = function (...args) {
+            originalLog.apply(console, args);
+            if (args[0] && typeof args[0] === 'string') {
+                if (args[0].includes('Recipe event') || args[0].includes('📨') || args[0].includes('🎨')) {
+                    addLog(args.join(' '), 'info', args[1]);
+                }
+            }
+        };
+
+        addLog('🚀 Debug console ready. Connect to the voice agent and start describing a recipe.', 'success');
+        addLog('Waiting for LiveKit data channel events...', 'info');
+    </script>
+</body>
+
+</html>

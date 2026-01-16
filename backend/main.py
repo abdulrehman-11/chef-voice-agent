@@ -71,8 +71,302 @@ class ChefAssistant(Agent):
     def __init__(self, chef_id: str):
         super().__init__(instructions=SYSTEM_PROMPT)
         self.chef_id = chef_id
+        self._room = None  # Will be set by session
+        
+        # Temporary state for recipe being built in real-time
+        self._current_recipe = {
+            'name': None,
+            'recipe_type': None,  # 'plate' or 'batch'
+            'description': '',
+            'serves': None,
+            'yield_quantity': None,
+            'yield_unit': None,
+            'cuisine': '',
+            'category': '',
+            'temperature': None,
+            'temperature_unit': 'C',
+            'ingredients': [],
+            'instructions': [],
+            'plating_instructions': '',
+            'presentation_notes': '',
+        }
+        
         logger.info(f"Chef Assistant initialized for: {chef_id}")
     
+    async def send_recipe_event(self, event_type: str, data: dict):
+        """Send recipe update events to frontend via LiveKit data channel.
+        
+        This enables real-time UI updates as the recipe is being built.
+        
+        Args:
+            event_type: Type of event (recipe_start, field_update, ingredient_add, recipe_save)
+            data: Event data to send to frontend
+        """
+        if not self._room:
+            logger.warning("Room not set, cannot send recipe event")
+            return
+        
+        try:
+            import json
+            event_payload = {
+                "type": "recipe_event",
+                "event": event_type,
+                "timestamp": datetime.now().isoformat(),
+                **data
+            }
+            message = json.dumps(event_payload)
+            
+            # Send to all participants via data channel
+            await self._room.local_participant.publish_data(
+                message.encode('utf-8'),
+                reliable=True
+            )
+            logger.info(f"📤 Sent recipe event: {event_type}")
+        except Exception as e:
+            logger.error(f"Failed to send recipe event: {e}")
+    
+
+# ============ INTERMEDIATE FUNCTION TOOLS FOR LIVE RECIPE BUILDING ============
+    @function_tool()
+    async def start_recipe(
+        self,
+        context: RunContext,
+        name: str,
+        recipe_type: str,
+        description: str = ""
+    ) -> str:
+        """Start building a new recipe in real-time.
+        
+        Call this function AS SOON AS the chef mentions they're making a recipe.
+        This initializes the recipe and shows it in the live recipe builder UI.
+        
+        Args:
+            name: Name of the recipe (e.g., "Chicken Biryani")
+            recipe_type: Type of recipe - must be either "plate" or "batch"
+            description: Optional brief description of the dish
+            
+        Returns:
+            Confirmation message
+        """
+        try:
+            logger.info(f"🆕 STARTING RECIPE: {name} ({recipe_type})")
+            
+            # Initialize/reset current recipe state
+            self._current_recipe = {
+                'name': name,
+                'recipe_type': recipe_type.lower(),
+                'description': description,
+                'serves': None,
+                'yield_quantity': None,
+                'yield_unit': None,
+                'cuisine':  '',
+                'category': '',
+                'temperature': None,
+                'temperature_unit': 'C',
+                'ingredients': [],
+                'instructions': [],
+                'plating_instructions': '',
+                'presentation_notes': '',
+            }
+            
+            # Send recipe_start event to frontend
+            await self.send_recipe_event("recipe_start", {
+                "recipe_type": recipe_type.lower(),
+                "name": name,
+                "description": description
+            })
+            
+            return f"Got it! Starting to build {name}. I'll track the details as you describe them."
+            
+        except Exception as e:
+            logger.error(f"Error starting recipe: {e}", exc_info=True)
+            return f"I had trouble starting the recipe. Could you try again?"
+    @function_tool()
+    async def update_recipe_metadata(
+        self,
+        context: RunContext,
+        serves: int = None,
+        yield_quantity: float = None,
+        yield_unit: str = None,
+        cuisine: str = None,
+        category: str = None,
+        temperature: float = None,
+        temperature_unit: str = None,
+        description: str = None
+    ) -> str:
+        """Update metadata for the recipe currently being built.
+        
+        Call this when the chef mentions serves, yield, cuisine, category, etc.
+        Can be called multiple times to update different fields.
+        
+        Args:
+            serves: Number of servings (for plate recipes)
+            yield_quantity: Amount yielded (for batch recipes)
+            yield_unit: Unit of yield (kg, liters, etc.)
+            cuisine: Type of cuisine (Indian, Italian, etc.)
+            category: Category (appetizer, main, dessert, etc.)
+            temperature: Cooking/storage temperature
+            temperature_unit: C or F
+            description: Description of the dish
+            
+        Returns:
+            Confirmation message
+        """
+        try:
+            if not self._current_recipe.get('name'):
+                return "No recipe in progress. Please start a recipe first by saying what you're making."
+            
+            # Update state
+            updates = {}
+            if serves is not None:
+                self._current_recipe['serves'] = serves
+                updates['serves'] = serves
+            if yield_quantity is not None:
+                self._current_recipe['yield_quantity'] = yield_quantity
+                updates['yield_quantity'] = yield_quantity
+            if yield_unit:
+                self._current_recipe['yield_unit'] = yield_unit
+                updates['yield_unit'] = yield_unit
+            if cuisine:
+                self._current_recipe['cuisine'] = cuisine
+                updates['cuisine'] = cuisine
+            if category:
+                self._current_recipe['category'] = category
+                updates['category'] = category
+            if temperature is not None:
+                self._current_recipe['temperature'] = temperature
+                updates['temperature'] = temperature
+            if temperature_unit:
+                self._current_recipe['temperature_unit'] = temperature_unit
+                updates['temperature_unit'] = temperature_unit
+            if description:
+                self._current_recipe['description'] = description
+                updates['description'] = description
+            
+            logger.info(f"📝 UPDATED METADATA: {updates}")
+            
+            # Send metadata update event
+            await self.send_recipe_event("recipe_metadata_update", {
+                "recipe_type": self._current_recipe['recipe_type'],
+                "name": self._current_recipe['name'],
+                **updates
+            })
+            
+            # Build response mentioning what was updated
+            updated_fields = [f"{k}: {v}" for k, v in updates.items()]
+            return f"Noted: {', '.join(updated_fields)}"
+            
+        except Exception as e:
+            logger.error(f"Error updating metadata: {e}", exc_info=True)
+            return "I had trouble updating that information."
+    @function_tool()
+    async def add_ingredient(
+        self,
+        context: RunContext,
+        name: str,
+        quantity: str = "",
+        unit: str = ""
+    ) -> str:
+        """Add a single ingredient to the current recipe.
+        
+        IMPORTANT: Call this function ONCE for EACH ingredient mentioned.
+        If the chef says "500g chicken, 300g rice, 2 onions" you should call this
+        function THREE separate times (once for chicken, once for rice, once for onions).
+        
+        Args:
+            name: Name of the ingredient (e.g., "chicken", "rice", "onions")
+            quantity: Amount (e.g., "500", "2", "1/2")
+            unit: Unit of measurement (e.g., "g", "kg", "cups", "tablespoons")
+            
+        Returns:
+            Confirmation message
+        """
+        try:
+            if not self._current_recipe.get('name'):
+                return "No recipe in progress. Please start a recipe first."
+            
+            ingredient = {
+                'name': name,
+                'quantity': quantity,
+                'unit': unit
+            }
+            
+            self._current_recipe['ingredients'].append(ingredient)
+            
+            logger.info(f"🥗 ADDED INGREDIENT: {quantity} {unit} {name}")
+            
+            # Send ingredient add event
+            await self.send_recipe_event("ingredient_add", {
+                "recipe_type": self._current_recipe['recipe_type'],
+                "name": self._current_recipe['name'],
+                "ingredient": ingredient,
+                "total_ingredients": len(self._current_recipe['ingredients'])
+            })
+            
+            return f"Added {quantity} {unit} {name}"
+            
+        except Exception as e:
+            logger.error(f"Error adding ingredient: {e}", exc_info=True)
+            return "I had trouble adding that ingredient."
+    @function_tool()
+    async def add_instruction(
+        self,
+        context: RunContext,
+        instruction: str
+    ) -> str:
+        """Add a cooking instruction or step to the current recipe.
+        
+        Call this when the chef describes cooking steps, techniques, or notes.
+        Can be called multiple times for different steps.
+        
+        Args:
+            instruction: The instruction text (e.g., "Marinate for 30 minutes")
+            
+        Returns:
+            Confirmation message
+        """
+        try:
+            if not self._current_recipe.get('name'):
+                return "No recipe in progress. Please start a recipe first."
+            
+            self._current_recipe['instructions'].append(instruction)
+            
+            logger.info(f"📋 ADDED INSTRUCTION: {instruction[:50]}...")
+            
+            # Send instruction add event
+            await self.send_recipe_event("instruction_add", {
+                "recipe_type": self._current_recipe['recipe_type'],
+                "name": self._current_recipe['name'],
+                "instruction": instruction,
+                "total_instructions": len(self._current_recipe['instructions'])
+            })
+            
+            return f"Noted: {instruction}"
+            
+        except Exception as e:
+            logger.error(f"Error adding instruction: {e}", exc_info=True)
+            return "I had trouble adding that instruction."
+    def clear_current_recipe(self):
+        """Clear the current recipe state after saving"""
+        self._current_recipe = {
+            'name': None,
+            'recipe_type': None,
+            'description': '',
+            'serves': None,
+            'yield_quantity': None,
+            'yield_unit': None,
+            'cuisine': '',
+            'category': '',
+            'temperature': None,
+            'temperature_unit': 'C',
+            'ingredients': [],
+            'instructions': [],
+            'plating_instructions': '',
+            'presentation_notes': '',
+        }
+        logger.info("🧹 Cleared current recipe state")
+    # ============ END INTERMEDIATE TOOLS ============
+
     @function_tool()
     async def save_plate_recipe(
         self, 
@@ -102,6 +396,17 @@ class ChefAssistant(Agent):
         try:
             logger.info(f"SAVING PLATE RECIPE: {name}")
             
+            # Send recipe start event to frontend
+            await self.send_recipe_event("recipe_saving", {
+                "recipe_type": "plate",
+                "name": name,
+                "serves": serves,
+                "description": description,
+                "cuisine": cuisine,
+                "category": category,
+                "ingredients": ingredients or []
+            })
+            
             recipe_id = db.save_plate_recipe(
                 chef_id=self.chef_id,
                 name=name,
@@ -117,6 +422,14 @@ class ChefAssistant(Agent):
             
             logger.info(f"SAVED to database with ID: {recipe_id}")
             
+            # Send success event to frontend
+            await self.send_recipe_event("recipe_saved", {
+                "recipe_type": "plate",
+                "recipe_id": str(recipe_id),
+                "name": name,
+                "success": True
+            })
+            
             return {
                 "success": True,
                 "recipe_id": str(recipe_id),
@@ -125,6 +438,14 @@ class ChefAssistant(Agent):
             
         except Exception as e:
             logger.error(f"Database save error: {e}", exc_info=True)
+            
+            # Send error event to frontend
+            await self.send_recipe_event("recipe_error", {
+                "recipe_type": "plate",
+                "name": name,
+                "error": str(e)
+            })
+            
             return {
                 "success": False,
                 "error": str(e),
@@ -159,6 +480,18 @@ class ChefAssistant(Agent):
         try:
             logger.info(f"SAVING BATCH RECIPE: {name}")
             
+            # Send recipe start event to frontend
+            await self.send_recipe_event("recipe_saving", {
+                "recipe_type": "batch",
+                "name": name,
+                "yield_quantity": yield_quantity,
+                "yield_unit": yield_unit,
+                "description": description,
+                "temperature": temperature,
+                "temperature_unit": temperature_unit,
+                "ingredients": ingredients or []
+            })
+            
             recipe_id = db.save_batch_recipe(
                 chef_id=self.chef_id,
                 name=name,
@@ -174,6 +507,14 @@ class ChefAssistant(Agent):
             
             logger.info(f"SAVED to database with ID: {recipe_id}")
             
+            # Send success event to frontend
+            await self.send_recipe_event("recipe_saved", {
+                "recipe_type": "batch",
+                "recipe_id": str(recipe_id),
+                "name": name,
+                "success": True
+            })
+            
             return {
                 "success": True,
                 "recipe_id": str(recipe_id),
@@ -182,6 +523,14 @@ class ChefAssistant(Agent):
             
         except Exception as e:
             logger.error(f"Database save error: {e}", exc_info=True)
+            
+            # Send error event to frontend
+            await self.send_recipe_event("recipe_error", {
+                "recipe_type": "batch",
+                "name": name,
+                "error": str(e)
+            })
+            
             return {
                 "success": False,
                 "error": str(e),
@@ -446,6 +795,9 @@ async def chef_agent(ctx: agents.JobContext):
     
     # Create assistant with chef ID for database context
     assistant = ChefAssistant(chef_id)
+    # Set room reference so assistant can send data channel events
+    assistant._room = ctx.room
+    logger.info("✅ Room reference set on assistant for data channel events")
     
     # Use Groq's Llama 3.3 70B model with low temperature for more deterministic responses
     groq_model = os.getenv('GROQ_MODEL', 'llama-3.3-70b-versatile')

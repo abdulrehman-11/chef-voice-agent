@@ -102,6 +102,35 @@ function showLanding() {
 }
 
 /**
+ * Switch between Recipe and Transcript views (Mobile/Tablet)
+ */
+function switchView(view) {
+    const recipePanel = document.getElementById('recipeBuilderPanel');
+    const conversationPanel = document.getElementById('conversationPanel');
+    const tabs = document.querySelectorAll('.view-tab');
+
+    // Update active states
+    tabs.forEach(tab => {
+        if (tab.dataset.view === view) {
+            tab.classList.add('active');
+        } else {
+            tab.classList.remove('active');
+        }
+    });
+
+    // Show/hide panels
+    if (view === 'recipe') {
+        recipePanel?.classList.add('active');
+        conversationPanel?.classList.remove('active');
+    } else {
+        conversationPanel?.classList.add('active');
+        recipePanel?.classList.remove('active');
+    }
+
+    console.log(`📱 Switched to ${view} view`);
+}
+
+/**
  * Voice Button Click Handler
  */
 async function handleVoiceClick() {
@@ -283,7 +312,22 @@ function setupRoomHandlers() {
 
             console.log('✅ Parsed data:', data);
 
-            if (data.type === 'transcript') {
+            // Handle recipe events
+            if (data.type === 'recipe_event') {
+                console.log('🎨 Recipe event received:', data.event);
+
+                // Route to Recipe Builder
+                if (window.RecipeBuilder) {
+                    window.RecipeBuilder.handleRecipeEvent(data);
+                }
+
+                // Auto-switch to recipe view on mobile/tablet when recipe starts
+                if (data.event === 'recipe_saving' && window.innerWidth < 1025) {
+                    switchView('recipe');
+                }
+            }
+            // Handle legacy transcript events
+            else if (data.type === 'transcript') {
                 console.log(`💬 [${data.role.toUpperCase()}] ${data.interim ? '[INTERIM]' : ''} ${data.text}`);
 
                 // Only add final transcripts to conversation
@@ -295,8 +339,10 @@ function setupRoomHandlers() {
                 if (data.interim && data.role === 'user') {
                     showInterimTranscript(data.text);
                 }
-            } else if (data.type === 'recipe_update') {
-                console.log('📋 Recipe update received:', data.recipe);
+            }
+            // Handle legacy recipe updates
+            else if (data.type === 'recipe_update') {
+                console.log('📋 Legacy recipe update received:', data.recipe);
                 updateRecipePreview(data.recipe);
             }
         } catch (error) {
@@ -541,4 +587,19 @@ window.ChefApp = {
     disconnectFromRoom,
     addMessage,
     updateRecipePreview,
+    switchView, // NEW: For view switching
 };
+
+// Initialize default view on mobile/tablet
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+        if (window.innerWidth < 1025) {
+            // Default to recipe view on mobile/tablet
+            switchView('recipe');
+        }
+    });
+} else {
+    if (window.innerWidth < 1025) {
+        switchView('recipe');
+    }
+}
