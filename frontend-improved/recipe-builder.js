@@ -118,6 +118,12 @@ const RecipeBuilder = {
             this.container.classList.add('visible');
             this.isVisible = true;
 
+            // CRITICAL FIX: Hide the empty state when showing the recipe
+            const emptyState = document.getElementById('emptyRecipeState');
+            if (emptyState) {
+                emptyState.style.display = 'none';
+            }
+
             // Trigger entrance animation
             setTimeout(() => {
                 if (this.recipeCard) {
@@ -463,6 +469,12 @@ const RecipeBuilder = {
         if (this.recipeMetadata) this.recipeMetadata.innerHTML = '';
         if (this.ingredientsList) this.ingredientsList.innerHTML = '';
         if (this.instructionsArea) this.instructionsArea.innerHTML = '';
+
+        // CRITICAL FIX: Restore the empty state when clearing
+        const emptyState = document.getElementById('emptyRecipeState');
+        if (emptyState) {
+            emptyState.style.display = 'flex';
+        }
 
         this.hide();
     }
