@@ -1,7 +1,7 @@
 """
 Chef Voice AI Agent - Main Entry Point
 Uses LiveKit Agents 1.3+ with AgentSession and function_tool pattern
-Groq LLM for intelligent conversation
+Mistral AI LLM for intelligent conversation
 """
 import logging
 import os
@@ -13,7 +13,7 @@ from dotenv import load_dotenv
 
 from livekit import agents, rtc
 from livekit.agents import AgentServer, AgentSession, Agent, AutoSubscribe, RunContext, function_tool, room_io
-from livekit.plugins import deepgram, cartesia, silero, groq, noise_cancellation
+from livekit.plugins import deepgram, cartesia, silero, mistralai, noise_cancellation
 
 import database as db
 import google_sheets
@@ -818,14 +818,14 @@ async def chef_agent(ctx: agents.JobContext):
     assistant._room = ctx.room
     logger.info("✅ Room reference set on assistant for data channel events")
     
-    # Use Groq's Llama 3.3 70B model with low temperature for more deterministic responses
-    groq_model = os.getenv('GROQ_MODEL', 'llama-3.3-70b-versatile')
+    # Use Mistral AI's large model with low temperature for more deterministic responses
+    mistral_model = os.getenv('MISTRAL_MODEL', 'mistral-large-latest')
     
     # Create session with STT/TTS/LLM
     logger.info("Setting up STT/TTS/LLM...")
     session = AgentSession(
         stt=deepgram.STT(model="nova-2-general", language="en"),
-        llm=groq.LLM(model=groq_model, temperature=0.3),
+        llm=mistralai.LLM(model=mistral_model, temperature=0.3),
         tts=cartesia.TTS(voice="d46abd1d-2d02-43e8-819f-51fb652c1c61"),  # Newsman voice
         vad=silero.VAD.load(),
     )
@@ -863,7 +863,7 @@ def run_agent_production():
     import sys
     
     required_vars = ['LIVEKIT_URL', 'LIVEKIT_API_KEY', 'LIVEKIT_API_SECRET',
-                     'DEEPGRAM_API_KEY', 'CARTESIA_API_KEY', 'GROQ_API_KEY', 'DATABASE_URL']
+                     'DEEPGRAM_API_KEY', 'CARTESIA_API_KEY', 'MISTRAL_API_KEY', 'DATABASE_URL']
     
     missing = [v for v in required_vars if not os.getenv(v)]
     if missing:
@@ -876,7 +876,7 @@ def run_agent_production():
     logger.info(f"LiveKit: {os.getenv('LIVEKIT_URL')}")
     logger.info("STT: Deepgram Nova-2")
     logger.info("TTS: Cartesia Sonic-3 (Newsman)")
-    logger.info(f"LLM: Groq {os.getenv('GROQ_MODEL', 'llama-3.1-8b-instant')} (temp=0.3)")
+    logger.info(f"LLM: Mistral AI {os.getenv('MISTRAL_MODEL', 'mistral-large-latest')} (temp=0.3)")
     logger.info("Turn Detection: Multilingual Model")
     logger.info("Noise Cancellation: BVC")
     logger.info("Agent ready - waiting for connections...")
@@ -890,7 +890,7 @@ def run_agent_production():
 if __name__ == "__main__":
     # Development mode
     required_vars = ['LIVEKIT_URL', 'LIVEKIT_API_KEY', 'LIVEKIT_API_SECRET',
-                     'DEEPGRAM_API_KEY', 'CARTESIA_API_KEY', 'GROQ_API_KEY', 'DATABASE_URL']
+                     'DEEPGRAM_API_KEY', 'CARTESIA_API_KEY', 'MISTRAL_API_KEY', 'DATABASE_URL']
     
     missing = [v for v in required_vars if not os.getenv(v)]
     if missing:

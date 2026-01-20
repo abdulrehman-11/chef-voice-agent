@@ -355,6 +355,11 @@
     color: var(--text-primary);
     font-weight: 600;
     margin-left: auto;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    word-break: break-word;
+    max-width: 100%;
+    text-align: right;
 }
 
 .metadata-description {
