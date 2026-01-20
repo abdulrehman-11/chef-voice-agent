@@ -82,6 +82,7 @@ const RecipeBuilder = {
      */
     startNewRecipe(data) {
         console.log('🆕 Starting new recipe:', data.name);
+        console.log('   📦 Received event data:', data);
 
         // Initialize current recipe state
         this.currentRecipe = {
@@ -97,6 +98,9 @@ const RecipeBuilder = {
             temperature: data.temperature || null,
             temperatureUnit: data.temperature_unit || 'C'
         };
+
+        console.log('   ✅ Initial recipe state:', this.currentRecipe);
+        console.log('   🍽️ Serves:', this.currentRecipe.serves, '| Cuisine:', this.currentRecipe.cuisine);
 
         // Show the recipe builder
         this.show();
@@ -182,10 +186,14 @@ const RecipeBuilder = {
     updateRecipeMetadata() {
         if (!this.currentRecipe || !this.recipeMetadata) return;
 
+        console.log('🎨 updateRecipeMetadata() called');
+        console.log('   📊 Current state - Serves:', this.currentRecipe.serves, '| Cuisine:', this.currentRecipe.cuisine);
+
         let metadataHTML = '';
 
         // Serves or Yield
         if (this.currentRecipe.serves) {
+            console.log('   ✅ Rendering Serves card:', this.currentRecipe.serves);
             metadataHTML += `
                 <div class="metadata-item">
                     <Span class="metadata-icon">👥</span>
@@ -205,6 +213,7 @@ const RecipeBuilder = {
 
         // Cuisine
         if (this.currentRecipe.cuisine) {
+            console.log('   ✅ Rendering Cuisine card:', this.currentRecipe.cuisine);
             metadataHTML += `
                 <div class="metadata-item">
                     <span class="metadata-icon">🌍</span>
@@ -301,6 +310,7 @@ const RecipeBuilder = {
 
         if (!this.currentRecipe) {
             // If no recipe started yet, initialize one
+            console.log('   ⚠️ No current recipe, initializing from event');
             this.currentRecipe = {
                 name: event.name || 'Building Recipe...',
                 type: event.recipe_type || '',
@@ -312,6 +322,9 @@ const RecipeBuilder = {
             this.updateRecipeHeader();
         }
 
+        // Log state before update
+        console.log('   📊 Before update - Serves:', this.currentRecipe.serves, '| Cuisine:', this.currentRecipe.cuisine);
+
         // Update fields
         if (event.serves !== undefined) this.currentRecipe.serves = event.serves;
         if (event.yield_quantity !== undefined) this.currentRecipe.serves = event.yield_quantity;
@@ -321,6 +334,10 @@ const RecipeBuilder = {
         if (event.temperature !== undefined) this.currentRecipe.temperature = event.temperature;
         if (event.temperature_unit) this.currentRecipe.temperatureUnit = event.temperature_unit;
         if (event.description) this.currentRecipe.description = event.description;
+
+        // Log state after update
+        console.log('   ✅ After update - Serves:', this.currentRecipe.serves, '| Cuisine:', this.currentRecipe.cuisine);
+        console.log('   🔄 Calling updateRecipeMetadata() to re-render UI');
 
         // Re-render metadata
         this.updateRecipeMetadata();

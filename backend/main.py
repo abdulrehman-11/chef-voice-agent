@@ -5,7 +5,7 @@ Groq LLM for intelligent conversation
 """
 import logging
 import os
-from typing import Any
+from typing import Any, Optional
 from decimal import Decimal
 from uuid import UUID
 from datetime import datetime
@@ -121,7 +121,9 @@ class ChefAssistant(Agent):
                 message.encode('utf-8'),
                 reliable=True
             )
+            # Enhanced logging to show full payload
             logger.info(f"📤 Sent recipe event: {event_type}")
+            logger.debug(f"   📦 Event payload: {event_payload}")
         except Exception as e:
             logger.error(f"Failed to send recipe event: {e}")
     
@@ -133,7 +135,10 @@ class ChefAssistant(Agent):
         context: RunContext,
         name: str,
         recipe_type: str,
-        description: str = ""
+        description: str = "",
+        serves: Optional[int] = None,
+        cuisine: Optional[str] = None,
+        category: Optional[str] = None
     ) -> str:
         """Start building a new recipe in real-time.
         
@@ -144,23 +149,27 @@ class ChefAssistant(Agent):
             name: Name of the recipe (e.g., "Chicken Biryani")
             recipe_type: Type of recipe - must be either "plate" or "batch"
             description: Optional brief description of the dish
+            serves: Number of servings (for plate recipes) - EXTRACT THIS if mentioned!
+            cuisine: Type of cuisine (e.g., "Italian", "Chinese") - EXTRACT THIS if mentioned!
+            category: Category (e.g., "main", "appetizer") - EXTRACT THIS if mentioned!
             
         Returns:
             Confirmation message
         """
         try:
             logger.info(f"🆕 STARTING RECIPE: {name} ({recipe_type})")
+            logger.info(f"   📝 Initial metadata - Serves: {serves}, Cuisine: {cuisine}, Category: {category}")
             
             # Initialize/reset current recipe state
             self._current_recipe = {
                 'name': name,
                 'recipe_type': recipe_type.lower(),
                 'description': description,
-                'serves': None,
+                'serves': serves,  # NOW can be set from the start!
                 'yield_quantity': None,
                 'yield_unit': None,
-                'cuisine':  '',
-                'category': '',
+                'cuisine': cuisine or '',  # NOW can be set from the start!
+                'category': category or '',  # NOW can be set from the start!
                 'temperature': None,
                 'temperature_unit': 'C',
                 'ingredients': [],
@@ -169,11 +178,18 @@ class ChefAssistant(Agent):
                 'presentation_notes': '',
             }
             
-            # Send recipe_start event to frontend
+            
+            # Send recipe_start event to frontend with initial metadata
             await self.send_recipe_event("recipe_start", {
                 "recipe_type": recipe_type.lower(),
                 "name": name,
-                "description": description
+                "description": description,
+                # Include initial metadata - NOW these can have values from the start!
+                "serves": serves,
+                "yield_quantity": self._current_recipe.get('yield_quantity'),
+                "yield_unit": self._current_recipe.get('yield_unit'),
+                "cuisine": cuisine or '',
+                "category": category or ''
             })
             
             return f"Got it! Starting to build {name}. I'll track the details as you describe them."
@@ -243,6 +259,9 @@ class ChefAssistant(Agent):
                 self._current_recipe['description'] = description
                 updates['description'] = description
             
+            # Enhanced logging to debug metadata flow
+            logger.info(f"📝 update_recipe_metadata called with: serves={serves}, cuisine={cuisine}, category={category}, "
+                       f"yield_quantity={yield_quantity}, yield_unit={yield_unit}, temperature={temperature}")
             logger.info(f"📝 UPDATED METADATA: {updates}")
             
             # Send metadata update event
