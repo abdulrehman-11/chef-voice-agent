@@ -13,7 +13,7 @@ from dotenv import load_dotenv
 
 from livekit import agents, rtc
 from livekit.agents import AgentServer, AgentSession, Agent, AutoSubscribe, RunContext, function_tool, room_io
-from livekit.plugins import deepgram, cartesia, silero, mistralai, noise_cancellation
+from livekit.plugins import deepgram, elevenlabs, silero, mistralai, noise_cancellation
 
 import database as db
 import google_sheets
@@ -826,7 +826,7 @@ async def chef_agent(ctx: agents.JobContext):
     session = AgentSession(
         stt=deepgram.STT(model="nova-2-general", language="en"),
         llm=mistralai.LLM(model=mistral_model, temperature=0.3),
-        tts=cartesia.TTS(voice="d46abd1d-2d02-43e8-819f-51fb652c1c61"),  # Newsman voice
+        tts=elevenlabs.TTS(),  # Uses default male voice
         vad=silero.VAD.load(),
     )
     
@@ -875,7 +875,7 @@ def run_agent_production():
     logger.info("=" * 60)
     logger.info(f"LiveKit: {os.getenv('LIVEKIT_URL')}")
     logger.info("STT: Deepgram Nova-2")
-    logger.info("TTS: Cartesia Sonic-3 (Newsman)")
+    logger.info("TTS: ElevenLabs (Default Male")
     logger.info(f"LLM: Mistral AI {os.getenv('MISTRAL_MODEL', 'mistral-large-latest')} (temp=0.3)")
     logger.info("Turn Detection: Multilingual Model")
     logger.info("Noise Cancellation: BVC")
