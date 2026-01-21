@@ -826,7 +826,7 @@ async def chef_agent(ctx: agents.JobContext):
     session = AgentSession(
         stt=deepgram.STT(model="nova-2-general", language="en"),
         llm=mistralai.LLM(model=mistral_model, temperature=0.3),
-        tts=elevenlabs.TTS(),  # Uses default male voice
+        tts=elevenlabs.TTS(voice="YDKyJiuSuoIjlFKKLCBU"),  # Custom voice
         vad=silero.VAD.load(),
     )
     
