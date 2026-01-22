@@ -65,6 +65,31 @@ def serialize_for_json(obj):
     return obj
 
 
+def clean_text_for_tts(text: str) -> str:
+    """
+    Clean LLM-generated text before sending to TTS.
+    Removes markdown formatting that TTS would speak literally.
+    """
+    import re
+    
+    # Remove pronunciation guides: *Too-lee-ah* → Too-lee-ah
+    text = re.sub(r'\*([^*]+)\*', r'\1', text)
+    
+    # Remove bold markdown: **word** → word  
+    text = re.sub(r'\*\*([^*]+)\*\*', r'\1', text)
+    
+    # Remove remaining asterisks
+    text = text.replace('*', '')
+    
+    # Remove backticks: `code` → code
+    text = re.sub(r'`([^`]+)`', r'\1', text)
+    
+    # Remove underscores for italic: _word_ → word
+    text = re.sub(r'_([^_]+)_', r'\1', text)
+    
+    return text.strip()
+
+
 class ChefAssistant(Agent):
     """Chef AI Voice Assistant with function tools for recipe operations"""
     
@@ -824,7 +849,14 @@ async def chef_agent(ctx: agents.JobContext):
     # Create session with STT/TTS/LLM
     logger.info("Setting up STT/TTS/LLM...")
     session = AgentSession(
-        stt=deepgram.STT(model="nova-2-general", language="en"),
+        stt=deepgram.STT(
+            model="nova-3",  # Upgraded from nova-2 for 47% better accuracy
+            language="en",
+            smart_format=True,  # Auto punctuation & capitalization
+            interim_results=True,  # Real-time transcription
+            utterance_end_ms=1000,  # Better turn detection
+            punctuate=True,  # Add punctuation
+        ),
         llm=mistralai.LLM(model=mistral_model, temperature=0.3),
         tts=cartesia.TTS(voice="d46abd1d-2d02-43e8-819f-51fb652c1c61"),  # Newsman voice
         vad=silero.VAD.load(),
@@ -835,6 +867,7 @@ async def chef_agent(ctx: agents.JobContext):
     await session.start(
         room=ctx.room,
         agent=assistant,
+        before_tts_cb=lambda text: clean_text_for_tts(text),  # Clean markdown before TTS
         room_options=room_io.RoomOptions(
             audio_input=room_io.AudioInputOptions(
                 # Use noise cancellation - BVC for web, BVCTelephony for SIP
