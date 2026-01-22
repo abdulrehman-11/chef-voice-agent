@@ -148,6 +148,9 @@ function scrollToApp() {
     if (voiceButton) {
         voiceButton.classList.remove('hidden');
     }
+
+    // Save state to localStorage
+    localStorage.setItem('chef_app_state', 'chat');
 }
 
 function showLanding() {
@@ -164,6 +167,9 @@ function showLanding() {
     if (voiceButton) {
         voiceButton.classList.add('hidden');
     }
+
+    // Save state to localStorage
+    localStorage.setItem('chef_app_state', 'landing');
 }
 
 /**
