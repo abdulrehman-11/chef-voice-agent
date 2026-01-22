@@ -96,7 +96,14 @@ function init() {
  * Restore Conversation from localStorage
  */
 function restoreConversation() {
+    // First, restore app state (landing vs chat)
+    const appState = localStorage.getItem('chef_app_state');
     const messages = getConversationFromStorage();
+
+    // If user was in chat OR has messages, show chat interface
+    if (appState === 'chat' || messages.length > 0) {
+        scrollToApp();
+    }
 
     if (messages.length > 0) {
         console.log(`📜 Restoring ${messages.length} messages from storage`);
