@@ -837,8 +837,29 @@ async def chef_agent(ctx: agents.JobContext):
     chef_id = 'mock_user'
     logger.info(f"Participant {participant.identity} joined, using chef_id: {chef_id}")
     
+    # Try to load conversation history from room metadata
+    conversation_history = ""
+    try:
+        import json
+        if hasattr(ctx.room, 'metadata') and ctx.room.metadata:
+            metadata = json.loads(ctx.room.metadata)
+            if 'conversation_history' in metadata and metadata['conversation_history']:
+                history_msgs = metadata['conversation_history'][-10:]  # Last 10 messages
+                conversation_history = "\n\nPREVIOUS CONVERSATION:\n"
+                for msg in history_msgs:
+                    role = "Chef" if msg.get('role') == 'user' else "You"
+                    conversation_history += f"{role}: {msg.get('text', '')}\n"
+                logger.info(f"📜 Loaded {len(history_msgs)} previous messages")
+    except Exception as e:
+        logger.warning(f"Could not load conversation history: {e}")
+    
     # Create assistant with chef ID for database context
     assistant = ChefAssistant(chef_id)
+    
+    # Inject conversation history into system prompt if available
+    if conversation_history:
+        assistant.instructions = assistant.instructions + conversation_history
+    
     # Set room reference so assistant can send data channel events
     assistant._room = ctx.room
     logger.info("✅ Room reference set on assistant for data channel events")

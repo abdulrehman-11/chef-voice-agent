@@ -453,7 +453,13 @@ function setupRoomHandlers() {
 async function getAccessToken() {
     try {
         // Generate unique room name for each session - this triggers agent dispatch
-        const uniqueRoomId = 'chef-' + Date.now() + '-' + Math.random().toString(36).substring(7);
+        const uniqueRoomId = 'chef-' + Date.now() + '-' + Math.random().toString().substring(7);
+
+        // Get conversation history from localStorage to send to backend
+        const messages = getConversationFromStorage();
+        const conversationHistory = messages.slice(-10); // Last 10 messages
+
+        console.log(`📜 Sending ${conversationHistory.length} previous messages for context`);
 
         const response = await fetch(TOKEN_SERVER_URL, {
             method: 'POST',
@@ -463,6 +469,9 @@ async function getAccessToken() {
             body: JSON.stringify({
                 room: uniqueRoomId,  // Unique room per session
                 identity: 'chef-' + Math.random().toString(36).substring(7),
+                metadata: JSON.stringify({
+                    conversation_history: conversationHistory
+                })
             }),
         });
 
