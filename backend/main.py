@@ -854,7 +854,6 @@ async def chef_agent(ctx: agents.JobContext):
             language="en",
             smart_format=True,  # Auto punctuation & capitalization
             interim_results=True,  # Real-time transcription
-            utterance_end_ms=1000,  # Better turn detection
             punctuate=True,  # Add punctuation
         ),
         llm=mistralai.LLM(model=mistral_model, temperature=0.3),
