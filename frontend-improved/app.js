@@ -108,10 +108,14 @@ function restoreConversation() {
     if (messages.length > 0) {
         console.log(`📜 Restoring ${messages.length} messages from storage`);
 
-        // Restore each message WITHOUT saving again
-        messages.forEach(msg => {
-            addMessageDOMOnly(msg.text, msg.role);
-        });
+        // Wait for DOM to be ready after scrollToApp
+        setTimeout(() => {
+            // Restore each message WITHOUT saving again
+            messages.forEach(msg => {
+                addMessageDOMOnly(msg.text, msg.role);
+            });
+            console.log(`✅ Restored ${messages.length} messages to conversation`);
+        }, 100); // Small delay to ensure conversationArea is available
     }
 }
 
