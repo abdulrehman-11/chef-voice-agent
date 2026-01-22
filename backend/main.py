@@ -866,7 +866,7 @@ async def chef_agent(ctx: agents.JobContext):
     await session.start(
         room=ctx.room,
         agent=assistant,
-        before_tts_cb=lambda text: clean_text_for_tts(text),  # Clean markdown before TTS
+        # Note: before_tts_cb not supported in agents 1.3.10 - relying on prompt to prevent markdown
         room_options=room_io.RoomOptions(
             audio_input=room_io.AudioInputOptions(
                 # Use noise cancellation - BVC for web, BVCTelephony for SIP
