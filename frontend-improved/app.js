@@ -17,6 +17,52 @@ let currentSlide = 0;
 let landingPage, appInterface, voiceButton, conversationArea, recipePreview;
 let connectionStatus, voiceVisualizer;
 
+// Session Storage Constants
+const STORAGE_KEY = 'chef_conversation';
+const MAX_MESSAGES = 100; // Prevent localStorage overflow
+
+/**
+ * Storage Helper Functions
+ */
+function saveMessageToStorage(text, role) {
+    try {
+        const messages = getConversationFromStorage();
+        messages.push({
+            text,
+            role,
+            timestamp: Date.now()
+        });
+
+        // Keep only last MAX_MESSAGES
+        const trimmed = messages.slice(-MAX_MESSAGES);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmed));
+    } catch (e) {
+        console.warn('⚠️ Failed to save message to localStorage:', e);
+        // Graceful degradation - app still works
+    }
+}
+
+function getConversationFromStorage() {
+    try {
+        const stored = localStorage.getItem(STORAGE_KEY);
+        return stored ? JSON.parse(stored) : [];
+    } catch (e) {
+        console.warn('⚠️ Failed to load conversation from localStorage:', e);
+        // Clear corrupted data
+        localStorage.removeItem(STORAGE_KEY);
+        return [];
+    }
+}
+
+function clearConversationStorage() {
+    try {
+        localStorage.removeItem(STORAGE_KEY);
+        console.log('✅ Conversation storage cleared');
+    } catch (e) {
+        console.warn('⚠️ Failed to clear conversation storage:', e);
+    }
+}
+
 /**
  * Initialize Application
  */
@@ -40,7 +86,26 @@ function init() {
         voiceButton.addEventListener('click', handleVoiceClick);
     }
 
+    // Restore conversation from localStorage
+    restoreConversation();
+
     console.log('✅ Application initialized');
+}
+
+/**
+ * Restore Conversation from localStorage
+ */
+function restoreConversation() {
+    const messages = getConversationFromStorage();
+
+    if (messages.length > 0) {
+        console.log(`📜 Restoring ${messages.length} messages from storage`);
+
+        // Restore each message WITHOUT saving again
+        messages.forEach(msg => {
+            addMessageDOMOnly(msg.text, msg.role);
+        });
+    }
 }
 
 /**
@@ -442,6 +507,20 @@ function addMessage(text, role = 'ai') {
 
     console.log(`💬 Adding message [${role}]:`, text);
 
+    // Save to localStorage
+    saveMessageToStorage(text, role);
+
+    // Add to DOM
+    addMessageDOMOnly(text, role);
+}
+
+/**
+ * Add Message to DOM Only (no localStorage save)
+ * Used for restoring messages from storage
+ */
+function addMessageDOMOnly(text, role = 'ai') {
+    if (!conversationArea) return;
+
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${role}-message`;
 
@@ -588,7 +667,29 @@ window.ChefApp = {
     addMessage,
     updateRecipePreview,
     switchView, // NEW: For view switching
+    clearConversationStorage, // NEW: For manual clearing
 };
+
+/**
+ * Session Storage: Clear on tab close (not refresh)
+ */
+let isRefreshing = false;
+
+window.addEventListener('beforeunload', (e) => {
+    // Detect if this is a refresh vs tab close
+    const perfNav = e.currentTarget.performance?.navigation;
+    const navType = e.currentTarget.performance?.getEntriesByType?.('navigation')?.[0]?.type;
+
+    // Navigation type 1 = reload, 'reload' = reload
+    isRefreshing = (perfNav?.type === 1) || (navType === 'reload');
+});
+
+window.addEventListener('unload', () => {
+    // Only clear if tab is closing (not refreshing)
+    if (!isRefreshing) {
+        clearConversationStorage();
+    }
+});
 
 // Initialize default view on mobile/tablet
 if (document.readyState === 'loading') {
