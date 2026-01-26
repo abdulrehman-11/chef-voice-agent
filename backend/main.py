@@ -13,7 +13,7 @@ from dotenv import load_dotenv
 
 from livekit import agents, rtc
 from livekit.agents import AgentServer, AgentSession, Agent, AutoSubscribe, RunContext, function_tool, room_io
-from livekit.plugins import deepgram, cartesia, silero, mistralai, noise_cancellation
+from livekit.plugins import deepgram, cartesia, elevenlabs, silero, mistralai, noise_cancellation
 
 import database as db
 import google_sheets
@@ -226,14 +226,14 @@ class ChefAssistant(Agent):
     async def update_recipe_metadata(
         self,
         context: RunContext,
-        serves: int = None,
-        yield_quantity: float = None,
-        yield_unit: str = None,
-        cuisine: str = None,
-        category: str = None,
-        temperature: float = None,
-        temperature_unit: str = None,
-        description: str = None
+        serves: Optional[int] = None,
+        yield_quantity: Optional[float] = None,
+        yield_unit: Optional[str] = None,
+        cuisine: Optional[str] = None,
+        category: Optional[str] = None,
+        temperature: Optional[float] = None,
+        temperature_unit: Optional[str] = None,
+        description: Optional[str] = None
     ) -> str:
         """Update metadata for the recipe currently being built.
         
@@ -867,6 +867,43 @@ async def chef_agent(ctx: agents.JobContext):
     # Use Mistral AI's large model with low temperature for more deterministic responses
     mistral_model = os.getenv('MISTRAL_MODEL', 'mistral-large-latest')
     
+    # ============================================================
+    # TTS PROVIDER CONFIGURATION - EASY TOGGLE
+    # ============================================================
+    # To switch TTS providers, change this variable:
+    # - "cartesia" = Cartesia Sonic-3 (fast, natural)
+    # - "elevenlabs" = ElevenLabs (premium quality)
+    
+    TTS_PROVIDER = "elevenlabs"  # ← CHANGE THIS TO SWITCH PROVIDERS
+    
+    # Voice configurations
+    CARTESIA_VOICE_ID = "d46abd1d-2d02-43e8-819f-51fb652c1c61"  # Newsman voice
+    ELEVENLABS_VOICE_ID = "pNInz6obpgDQGcFmaJgB"  # Adam voice (default, change if needed)
+    # Other popular ElevenLabs voices:
+    # - "21m00Tcm4TlvDq8ikWAM" = Rachel (calm female)
+    # - "AZnzlk1XvdvUeBnXmlld" = Domi (confident female)
+    # - "EXAVITQu4vr4xnSDxMaL" = Bella (soft female)
+    # - "ErXwobaYiN019PkySvjV" = Antoni (well-rounded male)
+    # - "MF3mGyEYCl7XYWbV9V6O" = Elli (emotional female)
+    # - "TxGEqnHWrfWFTfGW9XjX" = Josh (deep male)
+    # - "VR6AewLTigWG4xSOukaG" = Arnold (crisp male)
+    # - "pNInz6obpgDQGcFmaJgB" = Adam (deep male) ← CURRENT
+    # - "yoZ06aMxZJJ28mfd3POQ" = Sam (dynamic male)
+    
+    # Select TTS based on provider
+    if TTS_PROVIDER == "elevenlabs":
+        logger.info(f"🎙️ Using ElevenLabs TTS with voice: {ELEVENLABS_VOICE_ID}")
+        tts_engine = elevenlabs.TTS(
+            voice_id=ELEVENLABS_VOICE_ID,  # ElevenLabs only needs voice_id
+        )
+    elif TTS_PROVIDER == "cartesia":
+        logger.info(f"🎙️ Using Cartesia TTS with voice: {CARTESIA_VOICE_ID}")
+        tts_engine = cartesia.TTS(voice=CARTESIA_VOICE_ID)
+    else:
+        raise ValueError(f"Invalid TTS_PROVIDER: {TTS_PROVIDER}. Must be 'cartesia' or 'elevenlabs'")
+    
+    # ============================================================
+    
     # Create session with STT/TTS/LLM
     logger.info("Setting up STT/TTS/LLM...")
     session = AgentSession(
@@ -878,7 +915,7 @@ async def chef_agent(ctx: agents.JobContext):
             punctuate=True,  # Add punctuation
         ),
         llm=mistralai.LLM(model=mistral_model, temperature=0.3),
-        tts=cartesia.TTS(voice="d46abd1d-2d02-43e8-819f-51fb652c1c61"),  # Newsman voice
+        tts=tts_engine,  # Uses the selected TTS provider
         vad=silero.VAD.load(),
     )
     
@@ -896,6 +933,9 @@ async def chef_agent(ctx: agents.JobContext):
                     if params.participant.kind == rtc.ParticipantKind.PARTICIPANT_KIND_SIP 
                     else noise_cancellation.BVC(),
             ),
+            # CRITICAL: Keep session alive when participant disconnects (e.g., mic toggle)
+            # This allows seamless reconnection with same session context
+            close_on_disconnect=False,  # Don't close session on disconnect - allow reconnect!
         ),
     )
     
@@ -955,7 +995,7 @@ if __name__ == "__main__":
     logger.info("=" * 60)
     logger.info(f"LiveKit: {os.getenv('LIVEKIT_URL')}")
     logger.info("STT: Deepgram Nova-2")
-    logger.info("TTS: Cartesia Sonic-3 (Newsman)")
+    # TTS log will be shown dynamically when session starts based on TTS_PROVIDER
     logger.info(f"LLM: Groq {os.getenv('GROQ_MODEL', 'llama-3.3-70b-versatile')} (temp=0.3)")
     logger.info("Turn Detection: Multilingual Model")
     logger.info("Noise Cancellation: BVC (Background Voice Cancellation)")

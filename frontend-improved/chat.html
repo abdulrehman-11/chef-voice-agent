@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat - Chef AI Voice Assistant</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="recipe-builder-styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Playfair+Display:wght@400;500;600;700&display=swap"
+        rel="stylesheet">
+</head>
+
+<body>
+    <!-- Main App Interface -->
+    <div id="appInterface" class="app-interface">
+        <!-- Header -->
+        <header class="app-header">
+            <button class="back-button" onclick="window.location.href='index.html'">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path d="M19 12H5M12 19l-7-7 7-7" stroke-width="2" stroke-linecap="round" />
+                </svg>
+            </button>
+            <div class="header-title">
+                <svg width="28" height="28" viewBox="0 0 40 40" fill="none">
+                    <path d="M20 5L25 15H15L20 5Z" fill="#FF6B35" />
+                    <circle cx="20" cy="25" r="10" fill="#FF6B35" opacity="0.5" />
+                </svg>
+                <span>Chef AI</span>
+            </div>
+            <div class="connection-status" id="connectionStatus">
+                <span class="status-dot"></span>
+                <span class="status-text">Ready</span>
+            </div>
+        </header>
+
+        <!-- View Switcher (Mobile/Tablet Only) -->
+        <div class="view-switcher" id="viewSwitcher">
+            <button class="view-tab active" data-view="recipe" onclick="switchView('recipe')">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                    <path d="M2 17l10 5 10-5M2 12l10 5 10-5" />
+                </svg>
+                <span>Recipe</span>
+            </button>
+            <button class="view-tab" data-view="transcript" onclick="switchView('transcript')">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                </svg>
+                <span>Transcript</span>
+            </button>
+        </div>
+
+        <!-- Desktop: Two-Column | Tablet/Mobile: Single View -->
+        <div class="main-content">
+
+            <!-- Left: Conversation Transcript -->
+            <div class="conversation-panel" id="conversationPanel">
+                <div class="panel-header">
+                    <h3>Conversation</h3>
+                </div>
+                <div class="conversation-area" id="conversationArea">
+                    <div class="message ai-message">
+                        <div class="message-avatar">AI</div>
+                        <div class="message-content">
+                            <p>Hello! I'm TULLIA, your chef assistant. I can help you document recipes as you cook, or
+                                retrieve recipes you've saved before. What would you like to do?</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right: Recipe Builder -->
+            <div class="recipe-builder-panel" id="recipeBuilderPanel">
+                <div class="panel-header">
+                    <h3>Live Recipe Builder</h3>
+                </div>
+
+                <!-- Recipe Builder Container -->
+                <div class="recipe-builder hidden" id="recipeBuilder">
+                    <div class="recipe-card glass-card" id="recipeCard">
+                        <!-- Progress Indicator -->
+                        <div class="progress-indicator building" id="recipeProgress">✨ Building...</div>
+
+                        <!-- Recipe Header -->
+                        <div class="recipe-header" id="recipeHeaderSection">
+                            <div class="recipe-icon-container">
+                                <svg class="recipe-icon" width="48" height="48" viewBox="0 0 48 48" fill="none">
+                                    <circle cx="24" cy="24" r="20" fill="url(#plateGradient)" opacity="0.2" />
+                                    <path d="M24 8 L32 20 L24 18 L16 20 Z" fill="#FF6B35" opacity="0.8" />
+                                    <circle cx="24" cy="28" r="12" stroke="#FF6B35" stroke-width="2" fill="none"
+                                        opacity="0.6" />
+                                    <defs>
+                                        <linearGradient id="plateGradient" x1="0" y1="0" x2="1" y2="1">
+                                            <stop offset="0%" stop-color="#FF6B35" />
+                                            <stop offset="100%" stop-color="#F39C12" />
+                                        </linearGradient>
+                                    </defs>
+                                </svg>
+                            </div>
+                            <h2 class="recipe-name" id="recipeNameDisplay">Building Recipe...</h2>
+                            <span class="type-badge plate" id="recipeTypeBadge">Plate Recipe</span>
+                        </div>
+
+                        <!-- Recipe Metadata -->
+                        <div class="recipe-metadata" id="recipeMetadata">
+                            <!-- Dynamically populated by JS -->
+                        </div>
+
+                        <!-- Ingredients Section -->
+                        <div class="ingredients-section" id="ingredientsList">
+                            <!-- Dynamically populated by JS -->
+                            <div class="empty-state">Waiting for ingredients...</div>
+                        </div>
+
+                        <!-- Instructions Section -->
+                        <div class="instructions-section" id="recipeInstructions">
+                            <!-- Dynamically populated by JS -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Empty State (when no recipe is being built) -->
+                <div class="empty-recipe-state" id="emptyRecipeState">
+                    <div class="empty-icon">
+                        <svg width="80" height="80" viewBox="0 0 80 80" fill="none">
+                            <circle cx="40" cy="40" r="35" stroke="#2A2A2A" stroke-width="2" stroke-dasharray="4 4" />
+                            <path d="M40 20 L50 35 L40 32 L30 35 Z" fill="#3A3A3A" opacity="0.6" />
+                            <circle cx="40" cy="48" r="18" stroke="#3A3A3A" stroke-width="2" fill="none"
+                                opacity="0.4" />
+                        </svg>
+                    </div>
+                    <p class="empty-title">No Recipe in Progress</p>
+                    <p class="empty-subtitle">Start describing a recipe to see it build in real-time</p>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Floating Voice Button -->
+    <button class="floating-voice-button" id="voiceButton">
+        <div class="voice-button-inner">
+            <svg class="mic-icon" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-width="2">
+                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                <line x1="12" y1="19" x2="12" y2="23" />
+                <line x1="8" y1="23" x2="16" y2="23" />
+            </svg>
+        </div>
+        <div class="voice-ripple"></div>
+        <div class="voice-ripple"></div>
+        <div class="voice-ripple"></div>
+    </button>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/livekit-client@2.5.7/dist/livekit-client.umd.min.js"></script>
+    <script>
+        // Ensure LiveKit is available globally
+        window.LiveKit = window.LiveKit || window.LivekitClient;
+        console.log('LiveKit loaded:', window.LiveKit ? '✅' : '❌', window.LiveKit);
+    </script>
+    <script src="recipe-builder.js"></script>
+    <script src="app.js"></script>
+</body>
+
+</html>

@@ -13,8 +13,19 @@ let isConnected = false;
 let isRecording = false;
 let currentSlide = 0;
 
+// Session Management - Persistent across page refresh, unique per browser tab
+let sessionId = sessionStorage.getItem('chef_session_id');
+if (!sessionId) {
+    sessionId = 'session-' + Date.now() + '-' + Math.random().toString(36).substring(7);
+    sessionStorage.setItem('chef_session_id', sessionId);
+    console.log('🆕 Created new session:', sessionId);
+} else {
+    console.log('♻️ Restored existing session:', sessionId);
+}
+
 // DOM Elements (will be initialized on load)
-let landingPage, appInterface, voiceButton, conversationArea, recipePreview;
+// Note: landingPage and appInterface removed - now we have separate routes
+let voiceButton, conversationArea, recipePreview;
 let connectionStatus, voiceVisualizer;
 
 // Session Storage Constants
@@ -67,121 +78,49 @@ function clearConversationStorage() {
  * Initialize Application
  */
 function init() {
-    console.log('🎨 Initializing Chef AI Voice Assistant...');
+    console.log('🎨 Initializing Chef AI Chat Interface...');
 
-    // Get DOM elements
-    landingPage = document.getElementById('landingPage');
-    appInterface = document.getElementById('appInterface');
+    // Get DOM elements (chat page only)
     voiceButton = document.getElementById('voiceButton');
     conversationArea = document.getElementById('conversationArea');
     recipePreview = document.getElementById('recipePreview');
     connectionStatus = document.getElementById('connectionStatus');
     voiceVisualizer = document.getElementById('voiceVisualizer');
 
-    // Start carousel auto-play
-    startCarousel();
-
     // Setup voice button
     if (voiceButton) {
         voiceButton.addEventListener('click', handleVoiceClick);
     }
 
-    // Restore conversation from localStorage
+    // Restore conversation from localStorage on chat page
     restoreConversation();
 
-    console.log('✅ Application initialized');
+    console.log('✅ Chat interface initialized');
 }
 
 /**
  * Restore Conversation from localStorage
+ * Called when chat.html loads to restore previous messages
  */
 function restoreConversation() {
-    // First, restore app state (landing vs chat)
-    const appState = localStorage.getItem('chef_app_state');
     const messages = getConversationFromStorage();
-
-    // If user was in chat OR has messages, show chat interface
-    if (appState === 'chat' || messages.length > 0) {
-        scrollToApp();
-    }
 
     if (messages.length > 0) {
         console.log(`📜 Restoring ${messages.length} messages from storage`);
 
-        // Wait for DOM to be ready after scrollToApp
+        // Small delay to ensure DOM is ready
         setTimeout(() => {
             // Restore each message WITHOUT saving again
             messages.forEach(msg => {
                 addMessageDOMOnly(msg.text, msg.role);
             });
             console.log(`✅ Restored ${messages.length} messages to conversation`);
-        }, 100); // Small delay to ensure conversationArea is available
+        }, 100);
     }
 }
 
-/**
- * Carousel Management
- */
-function startCarousel() {
-    setInterval(() => {
-        currentSlide = (currentSlide + 1) % 3;
-        updateCarousel();
-    }, 5000); // Auto-slide every 5 seconds
-}
-
-function goToSlide(index) {
-    currentSlide = index;
-    updateCarousel();
-}
-
-function updateCarousel() {
-    const track = document.querySelector('.carousel-track');
-    const dots = document.querySelectorAll('.dot');
-
-    if (track) {
-        track.style.transform = `translateX(-${currentSlide * 100}%)`;
-    }
-
-    dots.forEach((dot, index) => {
-        dot.classList.toggle('active', index === currentSlide);
-    });
-}
-
-/**
- * Navigation Functions
- */
-function scrollToApp() {
-    // Show app interface
-    if (landingPage) landingPage.style.display = 'none';
-    if (appInterface) {
-        appInterface.classList.remove('hidden');
-    }
-    if (voiceButton) {
-        voiceButton.classList.remove('hidden');
-    }
-
-    // Save state to localStorage
-    localStorage.setItem('chef_app_state', 'chat');
-}
-
-function showLanding() {
-    // Disconnect if connected
-    if (isConnected) {
-        disconnectFromRoom();
-    }
-
-    // Show landing page
-    if (landingPage) landingPage.style.display = 'block';
-    if (appInterface) {
-        appInterface.classList.add('hidden');
-    }
-    if (voiceButton) {
-        voiceButton.classList.add('hidden');
-    }
-
-    // Save state to localStorage
-    localStorage.setItem('chef_app_state', 'landing');
-}
+// Carousel and navigation functions removed - now in index.html inline script
+// This file is only loaded on chat.html page
 
 /**
  * Switch between Recipe and Transcript views (Mobile/Tablet)
@@ -452,13 +391,15 @@ function setupRoomHandlers() {
  */
 async function getAccessToken() {
     try {
-        // Generate unique room name for each session - this triggers agent dispatch
-        const uniqueRoomId = 'chef-' + Date.now() + '-' + Math.random().toString().substring(7);
+        // IMPORTANT: Use persistent sessionId instead of generating new one each time
+        // This allows agent to remember context across mic toggles in same session
+        const roomId = sessionId; // Reuse same session ID throughout the tab's lifetime
 
         // Get conversation history from localStorage to send to backend
         const messages = getConversationFromStorage();
         const conversationHistory = messages.slice(-10); // Last 10 messages
 
+        console.log(`📜 Session ID: ${sessionId}`);
         console.log(`📜 Sending ${conversationHistory.length} previous messages for context`);
 
         const response = await fetch(TOKEN_SERVER_URL, {
@@ -467,9 +408,10 @@ async function getAccessToken() {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                room: uniqueRoomId,  // Unique room per session
-                identity: 'chef-' + Math.random().toString(36).substring(7),
+                room: roomId,  // Use persistent session ID - same room for entire session!
+                identity: sessionId,  // CRITICAL FIX: Use sessionId as identity too - same participant on reconnect!
                 metadata: JSON.stringify({
+                    session_id: sessionId,  // Send session ID explicitly
                     conversation_history: conversationHistory
                 })
             }),
@@ -685,15 +627,12 @@ if (document.readyState === 'loading') {
 
 // Export for debugging
 window.ChefApp = {
-    scrollToApp,
-    showLanding,
-    goToSlide,
     connectToRoom,
     disconnectFromRoom,
     addMessage,
     updateRecipePreview,
-    switchView, // NEW: For view switching
-    clearConversationStorage, // NEW: For manual clearing
+    switchView,
+    clearConversationStorage,
 };
 
 /**
