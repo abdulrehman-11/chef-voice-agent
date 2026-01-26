@@ -13,7 +13,16 @@ from dotenv import load_dotenv
 
 from livekit import agents, rtc
 from livekit.agents import AgentServer, AgentSession, Agent, AutoSubscribe, RunContext, function_tool, room_io
-from livekit.plugins import deepgram, cartesia, elevenlabs, silero, mistralai, noise_cancellation
+from livekit.plugins import deepgram, cartesia, silero, mistralai, noise_cancellation
+
+# Optional: ElevenLabs TTS (only if package is installed)
+try:
+    from livekit.plugins import elevenlabs
+    ELEVENLABS_AVAILABLE = True
+except ImportError:
+    ELEVENLABS_AVAILABLE = False
+    logger = logging.getLogger(__name__)  # Temp logger for warning
+    logging.warning("⚠️ livekit-plugins-elevenlabs not installed - ElevenLabs TTS unavailable, will use Cartesia")
 
 import database as db
 import google_sheets
@@ -891,6 +900,11 @@ async def chef_agent(ctx: agents.JobContext):
     # - "yoZ06aMxZJJ28mfd3POQ" = Sam (dynamic male)
     
     # Select TTS based on provider
+    # Auto-fallback to Cartesia if ElevenLabs not installed
+    if TTS_PROVIDER == "elevenlabs" and not ELEVENLABS_AVAILABLE:
+        logger.warning("⚠️ ElevenLabs requested but not installed - falling back to Cartesia")
+        TTS_PROVIDER = "cartesia"
+    
     if TTS_PROVIDER == "elevenlabs":
         logger.info(f"🎙️ Using ElevenLabs TTS with voice: {ELEVENLABS_VOICE_ID}")
         tts_engine = elevenlabs.TTS(
