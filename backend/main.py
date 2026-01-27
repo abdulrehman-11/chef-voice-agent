@@ -899,14 +899,23 @@ async def chef_agent(ctx: agents.JobContext):
     # TTS PROVIDER CONFIGURATION - EASY TOGGLE
     # ============================================================
     # To switch TTS providers, change this variable:
+    # - "deepgram" = Deepgram Aura (reliable, professional)
     # - "cartesia" = Cartesia Sonic-3 (fast, natural)
     # - "elevenlabs" = ElevenLabs (premium quality)
     
-    TTS_PROVIDER = "elevenlabs"  # ← CHANGE THIS TO SWITCH PROVIDERS
+    TTS_PROVIDER = "deepgram"  # ← CHANGE THIS TO SWITCH PROVIDERS
     
     # Voice configurations
-    CARTESIA_VOICE_ID = "d46abd1d-2d02-43e8-819f-51fb652c1c61"  # Newsman voice
-    ELEVENLABS_VOICE_ID = "ik"  # Adam voice (default, change if needed)
+    DEEPGRAM_VOICE = "aura-orpheus-en"  # Calm, authoritative male voice
+    # Other Deepgram Aura male voices:
+    # - "aura-arcas-en" = Arcas (clear, efficient, professional male)
+    # - "aura-perseus-en" = Perseus (assertive male)
+    # - "aura-orion-en" = Orion (approachable, calm male)
+    # - "aura-apollo-en" = Apollo (confident, casual male)
+    # - "aura-zeus-en" = Zeus (deep, trustworthy male)
+    
+    # CARTESIA_VOICE_ID = "d46abd1d-2d02-43e8-819f-51fb652c1c61"  # Newsman voice
+    # ELEVENLABS_VOICE_ID = "ik"  # Adam voice (default, change if needed)
     # Other popular ElevenLabs voices:
     # - "21m00Tcm4TlvDq8ikWAM" = Rachel (calm female)
     # - "AZnzlk1XvdvUeBnXmlld" = Domi (confident female)
@@ -915,25 +924,33 @@ async def chef_agent(ctx: agents.JobContext):
     # - "MF3mGyEYCl7XYWbV9V6O" = Elli (emotional female)
     # - "TxGEqnHWrfWFTfGW9XjX" = Josh (deep male)
     # - "VR6AewLTigWG4xSOukaG" = Arnold (crisp male)
-    # - "pNInz6obpgDQGcFmaJgB" = Adam (deep male) ← CURRENT
+    # - "pNInz6obpgDQGcFmaJgB" = Adam (deep male)
     # - "yoZ06aMxZJJ28mfd3POQ" = Sam (dynamic male)
     
     # Select TTS based on provider
-    # Auto-fallback to Cartesia if ElevenLabs not installed
-    if TTS_PROVIDER == "elevenlabs" and not ELEVENLABS_AVAILABLE:
-        logger.warning("⚠️ ElevenLabs requested but not installed - falling back to Cartesia")
-        TTS_PROVIDER = "cartesia"
-    
-    if TTS_PROVIDER == "elevenlabs":
-        logger.info(f"🎙️ Using ElevenLabs TTS with voice: {ELEVENLABS_VOICE_ID}")
-        tts_engine = elevenlabs.TTS(
-            voice_id=ELEVENLABS_VOICE_ID,
+    if TTS_PROVIDER == "deepgram":
+        logger.info(f"🎙️ Using Deepgram Aura TTS with voice: {DEEPGRAM_VOICE}")
+        tts_engine = deepgram.TTS(
+            model="aura-2-en",
+            voice=DEEPGRAM_VOICE,
         )
-    elif TTS_PROVIDER == "cartesia":
-        logger.info(f"🎙️ Using Cartesia TTS with voice: {CARTESIA_VOICE_ID}")
-        tts_engine = cartesia.TTS(voice=CARTESIA_VOICE_ID)
+    # elif TTS_PROVIDER == "elevenlabs" and ELEVENLABS_AVAILABLE:
+    #     logger.info(f"🎙️ Using ElevenLabs TTS with voice: {ELEVENLABS_VOICE_ID}")
+    #     tts_engine = elevenlabs.TTS(
+    #         voice_id=ELEVENLABS_VOICE_ID,
+    #     )
+    # elif TTS_PROVIDER == "cartesia":
+    #     logger.info(f"🎙️ Using Cartesia TTS with voice: {CARTESIA_VOICE_ID}")
+    #     tts_engine = cartesia.TTS(voice=CARTESIA_VOICE_ID)
     else:
-        raise ValueError(f"Invalid TTS_PROVIDER: {TTS_PROVIDER}. Must be 'cartesia' or 'elevenlabs'")
+        # Fallback to Deepgram if provider invalid
+        logger.warning(f"⚠️ Invalid TTS_PROVIDER: {TTS_PROVIDER} - falling back to Deepgram")
+        TTS_PROVIDER = "deepgram"
+        logger.info(f"🎙️ Using Deepgram Aura TTS with voice: {DEEPGRAM_VOICE}")
+        tts_engine = deepgram.TTS(
+            model="aura-2-en",
+            voice=DEEPGRAM_VOICE,
+        )
     
     # ============================================================
     
