@@ -387,51 +387,71 @@
     border-bottom: 2px solid rgba(255, 107, 53, 0.3);
 }
 
-.ingredients-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-    gap: 0.75rem;
-}
-
-.ingredient-item {
-    padding: 1rem;
-    background: rgba(255, 255, 255, 0.03);
+.ingredients-table {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    background: rgba(255, 255, 255, 0.02);
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: var(--radius-md);
+    overflow: hidden;
+}
+
+.table-header {
+    display: grid;
+    grid-template-columns: 100px 120px 1fr;
+    gap: 1rem;
+    padding: 0.75rem 1rem;
+    background: rgba(255, 107, 53, 0.1);
+    border-bottom: 2px solid rgba(255, 107, 53, 0.3);
+    font-weight: 600;
+    font-size: 0.75rem;
+    color: var(--text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.table-row {
+    display: grid;
+    grid-template-columns: 100px 120px 1fr;
+    gap: 1rem;
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
     transition: all 0.3s ease;
     animation: slideInRight 0.4s cubic-bezier(0.4, 0, 0.2, 1) backwards;
 }
 
-@keyframes slideInRight {
-    from {
-        opacity: 0;
-        transform: translateX(20px);
-    }
-
-    to {
-        opacity: 1;
-        transform: translateX(0);
-    }
+.table-row:last-child {
+    border-bottom: none;
 }
 
-.ingredient-item:hover {
-    background: rgba(255, 255, 255, 0.06);
-    border-color: rgba(255, 107, 53, 0.4);
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(255, 107, 53, 0.2);
+.table-row:hover {
+    background: rgba(255, 107, 53, 0.08);
 }
 
-.ingredient-quantity {
-    font-size: 0.85rem;
+.table-col {
+    display: flex;
+    align-items: center;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.table-col.qty {
     color: var(--primary);
-    font-weight: 600;
-    margin-bottom: 0.25rem;
+    font-weight: 700;
+    font-size: 1rem;
 }
 
-.ingredient-name {
-    font-size: 0.95rem;
+.table-col.unit {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    font-weight: 400;
+}
+
+.table-col.name {
     color: var(--text-primary);
     font-weight: 500;
+    font-size: 0.95rem;
 }
 
 /* Instructions Section */
@@ -626,8 +646,24 @@
         gap: 0.75rem;
     }
 
-    .ingredients-grid {
-        grid-template-columns: 1fr;
+    /* Mobile table adjustments */
+    .table-header,
+    .table-row {
+        grid-template-columns: 80px 100px 1fr;
+        gap: 0.5rem;
+        padding: 0.6rem 0.75rem;
+    }
+
+    .table-col.qty {
+        font-size: 0.9rem;
+    }
+
+    .table-col.unit {
+        font-size: 0.85rem;
+    }
+
+    .table-col.name {
+        font-size: 0.9rem;
     }
 
     /* CRITICAL: Voice Button Positioning for Mobile */

@@ -335,18 +335,32 @@ class ChefAssistant(Agent):
             Confirmation message
         """
         try:
+            # Import validation module
+            from ingredient_validator import validate_ingredient
+            
             if not self._current_recipe.get('name'):
                 return "No recipe in progress. Please start a recipe first."
+            
+            # Validate the ingredient
+            validation_result = validate_ingredient(name, quantity, unit)
+            
+            # If invalid unit, ask for clarification
+            if not validation_result['valid']:
+                logger.warning(f"⚠️ Invalid ingredient: {validation_result['message']}")
+                return validation_result['message']  # LLM will naturally ask follow-up
+            
+            # Use normalized unit (e.g., "tsp" -> "teaspoon", "g" -> "grams")
+            normalized_unit = validation_result['normalized_unit']
             
             ingredient = {
                 'name': name,
                 'quantity': quantity,
-                'unit': unit
+                'unit': normalized_unit
             }
             
             self._current_recipe['ingredients'].append(ingredient)
             
-            logger.info(f"🥗 ADDED INGREDIENT: {quantity} {unit} {name}")
+            logger.info(f"🥗 ADDED INGREDIENT: {quantity} {normalized_unit} {name}")
             
             # Send ingredient add event
             await self.send_recipe_event("ingredient_add", {
@@ -356,7 +370,12 @@ class ChefAssistant(Agent):
                 "total_ingredients": len(self._current_recipe['ingredients'])
             })
             
-            return f"Added {quantity} {unit} {name}"
+            # Check if ambiguous and provide suggestion
+            if validation_result.get('is_ambiguous'):
+                suggestion = validation_result.get('suggestion', '')
+                return f"Added {quantity} {normalized_unit} {name}. For precision, you could also use {suggestion} if you prefer."
+            
+            return f"Added {quantity} {normalized_unit} {name}"
             
         except Exception as e:
             logger.error(f"Error adding ingredient: {e}", exc_info=True)
@@ -887,7 +906,7 @@ async def chef_agent(ctx: agents.JobContext):
     
     # Voice configurations
     CARTESIA_VOICE_ID = "d46abd1d-2d02-43e8-819f-51fb652c1c61"  # Newsman voice
-    ELEVENLABS_VOICE_ID = "pNInz6obpgDQGcFmaJgB"  # Adam voice (default, change if needed)
+    ELEVENLABS_VOICE_ID = "ik"  # Adam voice (default, change if needed)
     # Other popular ElevenLabs voices:
     # - "21m00Tcm4TlvDq8ikWAM" = Rachel (calm female)
     # - "AZnzlk1XvdvUeBnXmlld" = Domi (confident female)

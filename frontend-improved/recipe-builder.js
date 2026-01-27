@@ -261,7 +261,16 @@ const RecipeBuilder = {
         }
 
         let html = '<div class="ingredients-header">Ingredients</div>';
-        html += '<div class="ingredients-grid">';
+        html += '<div class="ingredients-table">';
+
+        // Table header
+        html += `
+            <div class="table-header">
+                <div class="table-col">Quantity</div>
+                <div class="table-col">Unit</div>
+                <div class="table-col">Ingredient</div>
+            </div>
+        `;
 
         ingredients.forEach((ing, index) => {
             const quantity = ing.quantity || ing.amount || '';
@@ -269,14 +278,15 @@ const RecipeBuilder = {
             const name = ing.name || ing.ingredient || '';
 
             html += `
-                <div class="ingredient-item glass-item" style="animation-delay: ${index * 50}ms">
-                    <div class="ingredient-quantity">${quantity} ${unit}</div>
-                    <div class="ingredient-name">${name}</div>
+                <div class="table-row" style="animation-delay: ${index * 50}ms">
+                    <div class="table-col qty">${quantity}</div>
+                    <div class="table-col unit">${unit}</div>
+                    <div class="table-col name">${name}</div>
                 </div>
             `;
         });
 
-        html += '</div>';
+        html += '</div></div>';
         this.ingredientsList.innerHTML = html;
     },
 
