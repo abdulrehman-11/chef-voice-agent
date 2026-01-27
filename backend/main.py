@@ -908,7 +908,8 @@ async def chef_agent(ctx: agents.JobContext):
     if TTS_PROVIDER == "elevenlabs":
         logger.info(f"🎙️ Using ElevenLabs TTS with voice: {ELEVENLABS_VOICE_ID}")
         tts_engine = elevenlabs.TTS(
-            voice_id=ELEVENLABS_VOICE_ID,  # ElevenLabs only needs voice_id
+            voice_id=ELEVENLABS_VOICE_ID,
+            model_id="eleven_flash_v2_5",  # Fast, high-quality model (default recommended)
         )
     elif TTS_PROVIDER == "cartesia":
         logger.info(f"🎙️ Using Cartesia TTS with voice: {CARTESIA_VOICE_ID}")
