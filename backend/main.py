@@ -931,8 +931,7 @@ async def chef_agent(ctx: agents.JobContext):
     if TTS_PROVIDER == "deepgram":
         logger.info(f"🎙️ Using Deepgram Aura TTS with voice: {DEEPGRAM_VOICE}")
         tts_engine = deepgram.TTS(
-            model="aura-2-en",
-            voice=DEEPGRAM_VOICE,
+            model=DEEPGRAM_VOICE,  # Voice IS the model in Deepgram
         )
     # elif TTS_PROVIDER == "elevenlabs" and ELEVENLABS_AVAILABLE:
     #     logger.info(f"🎙️ Using ElevenLabs TTS with voice: {ELEVENLABS_VOICE_ID}")
@@ -948,8 +947,7 @@ async def chef_agent(ctx: agents.JobContext):
         TTS_PROVIDER = "deepgram"
         logger.info(f"🎙️ Using Deepgram Aura TTS with voice: {DEEPGRAM_VOICE}")
         tts_engine = deepgram.TTS(
-            model="aura-2-en",
-            voice=DEEPGRAM_VOICE,
+            model=DEEPGRAM_VOICE,  # Voice IS the model in Deepgram
         )
     
     # ============================================================
