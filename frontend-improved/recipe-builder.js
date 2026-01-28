@@ -57,6 +57,7 @@ const RecipeBuilder = {
                 this.updateMetadataFromEvent(event);
                 break;
             case 'ingredient_add':
+            case 'ingredient_update':  // Handle both add and update
                 this.addIngredientFromEvent(event);
                 break;
             case 'instruction_add':
@@ -336,6 +337,7 @@ const RecipeBuilder = {
         console.log('   📊 Before update - Serves:', this.currentRecipe.serves, '| Cuisine:', this.currentRecipe.cuisine);
 
         // Update fields
+        if (event.recipe_type) this.currentRecipe.type = event.recipe_type;  // Add recipe type handling
         if (event.serves !== undefined) this.currentRecipe.serves = event.serves;
         if (event.yield_quantity !== undefined) this.currentRecipe.serves = event.yield_quantity;
         if (event.yield_unit) this.currentRecipe.unit = event.yield_unit;
@@ -351,6 +353,12 @@ const RecipeBuilder = {
 
         // Re-render metadata
         this.updateRecipeMetadata();
+
+        // If recipe type changed, update the badge
+        if (event.recipe_type) {
+            console.log('   🏷️ Recipe type changed, updating header badge');
+            this.updateRecipeHeader();
+        }
     },
 
     /**
@@ -372,12 +380,25 @@ const RecipeBuilder = {
             this.updateRecipeHeader();
         }
 
-        // Add the new ingredient
+        // Add or update the ingredient
         if (event.ingredient) {
-            this.currentRecipe.ingredients.push(event.ingredient);
+            // Check if ingredient already exists (case-insensitive)
+            const existingIndex = this.currentRecipe.ingredients.findIndex(
+                ing => ing.name.toLowerCase() === event.ingredient.name.toLowerCase()
+            );
+
+            if (existingIndex >= 0) {
+                // UPDATE existing ingredient
+                console.log('   🔄 Updating existing ingredient at index', existingIndex);
+                this.currentRecipe.ingredients[existingIndex] = event.ingredient;
+            } else {
+                // ADD new ingredient
+                console.log('   ➕ Adding new ingredient');
+                this.currentRecipe.ingredients.push(event.ingredient);
+            }
         }
 
-        // Re-render ingredients with new one
+        // Re-render ingredients with updated data
         this.updateIngredients();
     },
 

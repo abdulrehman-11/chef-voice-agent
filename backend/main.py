@@ -235,6 +235,7 @@ class ChefAssistant(Agent):
     async def update_recipe_metadata(
         self,
         context: RunContext,
+        recipe_type: Optional[str] = None,
         serves: Optional[int] = None,
         yield_quantity: Optional[float] = None,
         yield_unit: Optional[str] = None,
@@ -268,6 +269,9 @@ class ChefAssistant(Agent):
             
             # Update state
             updates = {}
+            if recipe_type:
+                self._current_recipe['recipe_type'] = recipe_type
+                updates['recipe_type'] = recipe_type
             if serves is not None:
                 self._current_recipe['serves'] = serves
                 updates['serves'] = serves
@@ -358,12 +362,26 @@ class ChefAssistant(Agent):
                 'unit': normalized_unit
             }
             
-            self._current_recipe['ingredients'].append(ingredient)
+            # Check if ingredient already exists (case-insensitive)
+            existing_idx = next(
+                (i for i, ing in enumerate(self._current_recipe['ingredients']) 
+                 if ing['name'].lower() == name.lower()), 
+                None
+            )
             
-            logger.info(f"🥗 ADDED INGREDIENT: {quantity} {normalized_unit} {name}")
+            if existing_idx is not None:
+                # UPDATE existing ingredient
+                self._current_recipe['ingredients'][existing_idx] = ingredient
+                event_type = "ingredient_update"
+                logger.info(f"🔄 UPDATED INGREDIENT: {quantity} {normalized_unit} {name}")
+            else:
+                # ADD new ingredient
+                self._current_recipe['ingredients'].append(ingredient)
+                event_type = "ingredient_add"
+                logger.info(f"🥗 ADDED INGREDIENT: {quantity} {normalized_unit} {name}")
             
-            # Send ingredient add event
-            await self.send_recipe_event("ingredient_add", {
+            # Send appropriate event
+            await self.send_recipe_event(event_type, {
                 "recipe_type": self._current_recipe['recipe_type'],
                 "name": self._current_recipe['name'],
                 "ingredient": ingredient,
