@@ -355,11 +355,16 @@
     color: var(--text-primary);
     font-weight: 600;
     margin-left: auto;
-    word-wrap: break-word;
-    overflow-wrap: break-word;
-    word-break: break-word;
+    overflow-wrap: anywhere;
+    /* Allow wrapping at any point if needed */
     max-width: 100%;
     text-align: right;
+    white-space: nowrap;
+    /* Prevent wrapping to next line */
+    overflow: hidden;
+    /* Hide overflow */
+    text-overflow: ellipsis;
+    /* Show ... for overflow */
 }
 
 .metadata-description {

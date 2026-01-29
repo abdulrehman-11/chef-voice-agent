@@ -235,6 +235,7 @@ class ChefAssistant(Agent):
     async def update_recipe_metadata(
         self,
         context: RunContext,
+        name: Optional[str] = None,
         recipe_type: Optional[str] = None,
         serves: Optional[int] = None,
         yield_quantity: Optional[float] = None,
@@ -269,6 +270,9 @@ class ChefAssistant(Agent):
             
             # Update state
             updates = {}
+            if name:
+                self._current_recipe['name'] = name
+                updates['name'] = name
             if recipe_type:
                 self._current_recipe['recipe_type'] = recipe_type
                 updates['recipe_type'] = recipe_type

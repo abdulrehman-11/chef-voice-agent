@@ -337,6 +337,10 @@ const RecipeBuilder = {
         console.log('   📊 Before update - Serves:', this.currentRecipe.serves, '| Cuisine:', this.currentRecipe.cuisine);
 
         // Update fields
+        if (event.name) {
+            this.currentRecipe.name = event.name;
+            this.updateRecipeHeader();  // Update name in header
+        }
         if (event.recipe_type) this.currentRecipe.type = event.recipe_type;  // Add recipe type handling
         if (event.serves !== undefined) this.currentRecipe.serves = event.serves;
         if (event.yield_quantity !== undefined) this.currentRecipe.serves = event.yield_quantity;
