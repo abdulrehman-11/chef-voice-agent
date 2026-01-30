@@ -175,6 +175,269 @@ def check_recipe_exists(chef_id: str, name: str, recipe_type: str) -> Optional[D
         return_connection(conn)
 
 
+# ==================== VERSIONING HELPER FUNCTIONS ====================
+
+def _calculate_next_version(current_version: float, change_type: str = "minor") -> float:
+    """
+    Calculate the next version number based on current version and change type.
+    
+    Semantic versioning logic:
+    - 1.0 + minor → 1.1
+    - 1.9 + minor → 1.10
+    - 1.5 + major → 2.0
+    
+    Args:
+        current_version: Current version number (e.g., 1.0, 1.5)
+        change_type: Type of change ("minor" or "major")
+    
+    Returns:
+        Next version number as float
+    """
+    if change_type == "major":
+        # Increment major version (1.5 → 2.0)
+        return float(int(current_version) + 1)
+    else:
+        # Increment minor version (1.0 → 1.1, 1.9 → 1.10)
+        major = int(current_version)
+        minor = round((current_version - major) * 10)  # Extract minor (1.5 → 5)
+        new_minor = minor + 1
+        return major + (new_minor / 10)
+
+
+def _detect_recipe_changes(
+    old_data: Dict,
+    new_data: Dict,
+    old_ingredients: List[Dict],
+    new_ingredients: List[Dict]
+) -> Dict:
+    """
+    Detect what changed between two recipe versions.
+    Generates human-readable change summary.
+    
+    Args:
+        old_data: Previous recipe metadata
+        new_data: New recipe metadata
+        old_ingredients: Previous ingredients list
+        new_ingredients: New ingredients list
+    
+    Returns:
+        {
+            'summary': 'Reduced salt from 10g to 7g, Added garlic',
+            'fields_changed': ['salt', 'garlic', 'description'],
+            'change_type': 'minor'  # or 'major'
+        }
+    """
+    changes = []
+    fields_changed = []
+    
+    # Check metadata changes
+    metadata_fields = ['name', 'description', 'serves', 'cuisine', 'category', 
+                      'prep_time_minutes', 'cook_time_minutes', 'difficulty']
+    
+    for field in metadata_fields:
+        old_val = old_data.get(field)
+        new_val = new_data.get(field)
+        
+        if old_val != new_val and new_val is not None:
+            fields_changed.append(field)
+            if field == 'name':
+                changes.append(f"Renamed to '{new_val}'")
+            elif field in ['serves', 'prep_time_minutes', 'cook_time_minutes']:
+                changes.append(f"Changed {field.replace('_', ' ')} from {old_val} to {new_val}")
+    
+    # Check ingredient changes
+    old_ing_map = {ing['name'].lower(): ing for ing in old_ingredients if 'name' in ing}
+    new_ing_map = {ing['name'].lower(): ing for ing in new_ingredients if 'name' in ing}
+    
+    # Removed ingredients
+    removed = set(old_ing_map.keys()) - set(new_ing_map.keys())
+    for ing_name in removed:
+        changes.append(f"Removed {ing_name}")
+        fields_changed.append(ing_name)
+    
+    # Added ingredients
+    added = set(new_ing_map.keys()) - set(old_ing_map.keys())
+    for ing_name in added:
+        changes.append(f"Added {ing_name}")
+        fields_changed.append(ing_name)
+    
+    # Modified quantities
+    for ing_name in set(old_ing_map.keys()) & set(new_ing_map.keys()):
+        old_ing = old_ing_map[ing_name]
+        new_ing = new_ing_map[ing_name]
+        
+        old_qty = old_ing.get('quantity', 0)
+        new_qty = new_ing.get('quantity', 0)
+        
+        if old_qty != new_qty:
+            old_unit = old_ing.get('unit', '')
+            new_unit = new_ing.get('unit', '')
+            unit = new_unit if new_unit == old_unit else f"{old_unit} to {new_unit}"
+            changes.append(f"Changed {ing_name} from {old_qty}{old_unit} to {new_qty}{new_unit}")
+            fields_changed.append(ing_name)
+    
+    # Determine change type
+    # Major change: name change, > 3 ingredient changes, or complete recipe overhaul
+    major_indicators = ['name' in fields_changed, len(fields_changed) > 3, 
+                       len(removed) > 2, len(added) > 2]
+    change_type = "major" if any(major_indicators) else "minor"
+    
+    summary = ", ".join(changes[:5]) if changes else "Minor adjustments"
+    if len(changes) > 5:
+        summary += f" and {len(changes) - 5} more changes"
+    
+    return {
+        'summary': summary,
+        'fields_changed': fields_changed,
+        'change_type': change_type
+    }
+
+
+def _create_recipe_version(
+    cur,
+    recipe_id: str,
+    recipe_type: str,
+    version_number: float,
+    recipe_data: Dict,
+    ingredients: List[Dict],
+    created_by: str,
+    change_summary: Optional[str] = None,
+    change_reason: Optional[str] = None
+) -> str:
+    """
+    Create a new version snapshot for a recipe.
+    Stores complete recipe state at this version.
+    
+    Args:
+        cur: Database cursor
+        recipe_id: Parent recipe UUID
+        recipe_type: 'plate' or 'batch'
+        version_number: Version number (1.0, 1.1, etc.)
+        recipe_data: Complete recipe metadata dict
+        ingredients: List of ingredient dicts
+        created_by: Chef ID who created this version
+        change_summary: Auto-generated change description
+        change_reason: User-provided reason for change
+    
+    Returns:
+        version_id (UUID string)
+    """
+    if recipe_type == "plate":
+        # Insert into plate_recipe_versions
+        cur.execute("""
+            INSERT INTO plate_recipe_versions (
+                recipe_id, version_number, is_active, created_by,
+                change_summary, change_reason,
+                name, description, serves, category, cuisine,
+                plating_instructions, garnish, presentation_notes,
+                prep_time_minutes, cook_time_minutes, difficulty, notes
+            ) VALUES (
+                %s, %s, true, %s, %s, %s,
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+            ) RETURNING id
+        """, (
+            recipe_id, version_number, created_by, change_summary, change_reason,
+            recipe_data.get('name'), recipe_data.get('description'),
+            recipe_data.get('serves'), recipe_data.get('category'),
+            recipe_data.get('cuisine'), recipe_data.get('plating_instructions'),
+            recipe_data.get('garnish'), recipe_data.get('presentation_notes'),
+            recipe_data.get('prep_time_minutes'), recipe_data.get('cook_time_minutes'),
+            recipe_data.get('difficulty'), recipe_data.get('notes')
+        ))
+        
+        version_id = cur.fetchone()[0]
+        
+        # Insert ingredients for this version
+        for ing in ingredients:
+            # Get ingredient ID from ingredients table
+            cur.execute("""
+                SELECT id FROM ingredients 
+                WHERE name = %s
+            """, (ing['name'],))
+            
+            ing_result = cur.fetchone()
+            if not ing_result:
+                # Create ingredient if it doesn't exist
+                cur.execute("""
+                    INSERT INTO ingredients (name, unit, category)
+                    VALUES (%s, %s, %s)
+                    RETURNING id
+                """, (ing['name'], ing.get('unit', ''), ing.get('category', 'Other')))
+                ingredient_id = cur.fetchone()[0]
+            else:
+                ingredient_id = ing_result[0]
+            
+            # Insert into plate_version_ingredients
+            cur.execute("""
+                INSERT INTO plate_version_ingredients (
+                    version_id, ingredient_id, quantity, unit,
+                    preparation_notes, is_garnish, is_optional
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """, (
+                version_id, ingredient_id,
+                ing.get('quantity', 0), ing.get('unit', ''),
+                ing.get('preparation_notes'), ing.get('is_garnish', False),
+                ing.get('is_optional', False)
+            ))
+    
+    else:  # batch recipe
+        # Insert into batch_recipe_versions
+        cur.execute("""
+            INSERT INTO batch_recipe_versions (
+                recipe_id, version_number, is_active, created_by,
+                change_summary, change_reason,
+                name, description, yield_quantity, yield_unit,
+                prep_time_minutes, cook_time_minutes,
+                storage_instructions, temperature, temperature_unit,
+                equipment, instructions, notes
+            ) VALUES (
+                %s, %s, true, %s, %s, %s,
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+            ) RETURNING id
+        """, (
+            recipe_id, version_number, created_by, change_summary, change_reason,
+            recipe_data.get('name'), recipe_data.get('description'),
+            recipe_data.get('yield_quantity'), recipe_data.get('yield_unit'),
+            recipe_data.get('prep_time_minutes'), recipe_data.get('cook_time_minutes'),
+            recipe_data.get('storage_instructions'), recipe_data.get('temperature'),
+            recipe_data.get('temperature_unit'), recipe_data.get('equipment'),
+            recipe_data.get('instructions'), recipe_data.get('notes')
+        ))
+        
+        version_id = cur.fetchone()[0]
+        
+        # Insert ingredients
+        for ing in ingredients:
+            cur.execute("""
+                SELECT id FROM ingredients WHERE name = %s
+            """, (ing['name'],))
+            
+            ing_result = cur.fetchone()
+            if not ing_result:
+                cur.execute("""
+                    INSERT INTO ingredients (name, unit, category)
+                    VALUES (%s, %s, %s)
+                    RETURNING id
+                """, (ing['name'], ing.get('unit', ''), ing.get('category', 'Other')))
+                ingredient_id = cur.fetchone()[0]
+            else:
+                ingredient_id = ing_result[0]
+            
+            # Insert into batch_version_ingredients
+            cur.execute("""
+                INSERT INTO batch_version_ingredients (
+                    version_id, ingredient_id, quantity, unit,
+                    preparation_notes, is_optional
+                ) VALUES (%s, %s, %s, %s, %s, %s)
+            """, (
+                version_id, ingredient_id,
+                ing.get('quantity', 0), ing.get('unit', ''),
+                ing.get('preparation_notes'), ing.get('is_optional', False)
+            ))
+    
+    return str(version_id)
+
+
 # ==================== BATCH RECIPES ====================
 
 def save_batch_recipe(
@@ -243,6 +506,48 @@ def save_batch_recipe(
         
         conn.commit()
         print(f"✅ Saved batch recipe: {name} ({recipe_id})")
+        
+        # ==================== CREATE VERSION 1.0 ====================
+        # Automatically create version 1.0 for new batch recipes
+        try:
+            recipe_data = {
+                'name': name,
+                'description': description,
+                'yield_quantity': yield_quantity,
+                'yield_unit': yield_unit,
+                'prep_time_minutes': prep_time_minutes,
+                'cook_time_minutes': cook_time_minutes,
+                'storage_instructions': notes,
+                'temperature': temperature,
+                'temperature_unit': temperature_unit,
+                'equipment': equipment,
+                'instructions': instructions,
+                'notes': notes
+            }
+            
+            version_ingredients = ingredients if ingredients else []
+            
+            version_id = _create_recipe_version(
+                cur=cur,
+                recipe_id=str(recipe_id),
+                recipe_type="batch",
+                version_number=1.0,
+                recipe_data=recipe_data,
+                ingredients=version_ingredients,
+                created_by=chef_id,
+                change_summary="Initial recipe creation (v1.0)",
+                change_reason=None
+            )
+            
+            conn.commit()
+            logger.info(f"✅ Created version 1.0 for batch recipe '{name}' (version_id: {version_id})")
+            
+        except Exception as version_error:
+            logger.error(f"⚠️ Failed to create v1.0 for batch '{name}': {version_error}")
+            conn.rollback()
+        
+        # ==================== END VERSION CREATION ====================
+        
         
         # Sync to Google Sheets (non-blocking, failures don't affect DB save)
         if SHEETS_ENABLED:
@@ -352,6 +657,52 @@ def save_plate_recipe(
         
         conn.commit()
         print(f"✅ Saved plate recipe: {name} ({recipe_id})")
+        
+        # ==================== CREATE VERSION 1.0 ====================
+        # Automatically create version 1.0 for new recipes to enable version tracking
+        try:
+            # Prepare recipe data for version snapshot
+            recipe_data = {
+                'name': name,
+                'description': description,
+                'serves': serves,
+                'category': category,
+                'cuisine': cuisine,
+                'plating_instructions': plating_instructions,
+                'garnish': garnish,
+                'presentation_notes': presentation_notes,
+                'prep_time_minutes': prep_time_minutes,
+                'cook_time_minutes': cook_time_minutes,
+                'difficulty': difficulty,
+                'notes': notes
+            }
+            
+            # Prepare ingredients list for versioning
+            version_ingredients = ingredients if ingredients else []
+            
+            # Create v1.0 in versioning system
+            version_id = _create_recipe_version(
+                cur=cur,
+                recipe_id=str(recipe_id),
+                recipe_type="plate",
+                version_number=1.0,
+                recipe_data=recipe_data,
+                ingredients=version_ingredients,
+                created_by=chef_id,
+                change_summary="Initial recipe creation (v1.0)",
+                change_reason=None
+            )
+            
+            conn.commit()
+            logger.info(f"✅ Created version 1.0 for plate recipe '{name}' (version_id: {version_id})")
+            
+        except Exception as version_error:
+            # Version creation failure shouldn't block recipe save
+            logger.error(f"⚠️ Failed to create v1.0 for '{name}': {version_error}")
+            conn.rollback()  # Rollback version, but recipe is still saved
+        
+        # ==================== END VERSION CREATION ====================
+        
         
         # Sync to Google Sheets (non-blocking, failures don't affect DB save)
         if SHEETS_ENABLED:
