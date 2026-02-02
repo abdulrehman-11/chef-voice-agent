@@ -67,7 +67,7 @@ def get_connection():
             return conn
         except:
             # Pool might be corrupted, reinitialize
-            logger.info("🔄 Reinitializing connection pool...")
+            logger.info("Reinitializing connection pool...")
             pool = None
             init_db()
             return pool.getconn()
@@ -129,7 +129,7 @@ def _get_unique_recipe_name(cur, chef_id: str, name: str, recipe_type: str) -> s
         """, (chef_id, versioned_name))
         
         if not cur.fetchone():
-            logger.info(f"✅ Using versioned name: '{versioned_name}'")
+            logger.info(f"Using versioned name: '{versioned_name}'")
             return versioned_name
         
         version += 1
@@ -345,7 +345,7 @@ def _create_recipe_version(
             recipe_data.get('difficulty'), recipe_data.get('notes')
         ))
         
-        version_id = cur.fetchone()[0]
+        version_id = cur.fetchone()['id']
         
         # Insert ingredients for this version
         for ing in ingredients:
@@ -363,9 +363,9 @@ def _create_recipe_version(
                     VALUES (%s, %s, %s)
                     RETURNING id
                 """, (ing['name'], ing.get('unit', ''), ing.get('category', 'Other')))
-                ingredient_id = cur.fetchone()[0]
+                ingredient_id = cur.fetchone()['id']
             else:
-                ingredient_id = ing_result[0]
+                ingredient_id = ing_result['id']
             
             # Insert into plate_version_ingredients
             cur.execute("""
@@ -404,7 +404,7 @@ def _create_recipe_version(
             recipe_data.get('instructions'), recipe_data.get('notes')
         ))
         
-        version_id = cur.fetchone()[0]
+        version_id = cur.fetchone()['id']
         
         # Insert ingredients
         for ing in ingredients:
@@ -419,9 +419,9 @@ def _create_recipe_version(
                     VALUES (%s, %s, %s)
                     RETURNING id
                 """, (ing['name'], ing.get('unit', ''), ing.get('category', 'Other')))
-                ingredient_id = cur.fetchone()[0]
+                ingredient_id = cur.fetchone()['id']
             else:
-                ingredient_id = ing_result[0]
+                ingredient_id = ing_result['id']
             
             # Insert into batch_version_ingredients
             cur.execute("""
@@ -467,7 +467,7 @@ def save_batch_recipe(
         # Check for duplicate name and get unique version if needed
         unique_name = _get_unique_recipe_name(cur, chef_id, name, 'batch')
         if unique_name != name:
-            logger.info(f"📝 Recipe name '{name}' already exists, using '{unique_name}' instead")
+            logger.info(f"Recipe name '{name}' already exists, using '{unique_name}' instead")
             name = unique_name  # Use the versioned name
         
         # Insert batch recipe
@@ -540,10 +540,10 @@ def save_batch_recipe(
             )
             
             conn.commit()
-            logger.info(f"✅ Created version 1.0 for batch recipe '{name}' (version_id: {version_id})")
+            logger.info(f"Created version 1.0 for batch recipe '{name}' (version_id: {version_id})")
             
         except Exception as version_error:
-            logger.error(f"⚠️ Failed to create v1.0 for batch '{name}': {version_error}")
+            logger.error(f"Failed to create v1.0 for batch '{name}': {version_error}")
             conn.rollback()
         
         # ==================== END VERSION CREATION ====================
@@ -607,7 +607,7 @@ def save_plate_recipe(
         # Check for duplicate name and get unique version if needed
         unique_name = _get_unique_recipe_name(cur, chef_id, name, 'plate')
         if unique_name != name:
-            logger.info(f"📝 Recipe name '{name}' already exists, using '{unique_name}' instead")
+            logger.info(f"Recipe name '{name}' already exists, using '{unique_name}' instead")
             name = unique_name  # Use the versioned name
         
         # Insert plate recipe
@@ -694,11 +694,11 @@ def save_plate_recipe(
             )
             
             conn.commit()
-            logger.info(f"✅ Created version 1.0 for plate recipe '{name}' (version_id: {version_id})")
+            logger.info(f"Created version 1.0 for plate recipe '{name}' (version_id: {version_id})")
             
         except Exception as version_error:
             # Version creation failure shouldn't block recipe save
-            logger.error(f"⚠️ Failed to create v1.0 for '{name}': {version_error}")
+            logger.error(f"Failed to create v1.0 for '{name}': {version_error}")
             conn.rollback()  # Rollback version, but recipe is still saved
         
         # ==================== END VERSION CREATION ====================
@@ -913,8 +913,8 @@ def update_recipe(
                     )
                     
                     conn.commit()
-                    logger.info(f"✅ Created version {next_version} for plate recipe '{new_data['name']}' (was v{current_version})")
-                    logger.info(f"📝 Changes: {change_info['summary']}")
+                    logger.info(f"Created version {next_version} for plate recipe '{new_data['name']}' (was v{current_version})")
+                    logger.info(f"Changes: {change_info['summary']}")
                     
                 else:
                     # No previous version exists - create v1.0 as baseline
@@ -951,13 +951,13 @@ def update_recipe(
                     )
                     
                     conn.commit()
-                    logger.info(f"✅ Created retroactive version 1.0 for '{recipe_data['name']}'")
+                    logger.info(f"Created retroactive version 1.0 for '{recipe_data['name']}'")
             
             # TODO: Add batch recipe versioning (similar logic)
             # For now, batch recipes will skip versioning on update
                 
         except Exception as version_error:
-            logger.error(f"⚠️ Failed to create new version during update: {version_error}")
+            logger.error(f"Failed to create new version during update: {version_error}")
             # Don't rollback the main update - versioning failure shouldn't block recipe update
             # The recipe update already succeeded and was committed
         
