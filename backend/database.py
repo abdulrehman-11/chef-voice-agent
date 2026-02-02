@@ -824,6 +824,146 @@ def update_recipe(
         
         conn.commit()
         
+        # ==================== CREATE NEW VERSION ====================
+        # After successful update, create new version snapshot
+        try:
+            # Step 1: Get OLD recipe state (from last active version)
+            if recipe_type == "plate":
+                cur.execute("""
+                    SELECT 
+                        version_number,
+                        name, description, serves, category, cuisine,
+                        plating_instructions, garnish, presentation_notes,
+                        prep_time_minutes, cook_time_minutes, difficulty, notes
+                    FROM plate_recipe_versions
+                    WHERE recipe_id = %s AND is_active = true
+                    ORDER BY version_number DESC
+                    LIMIT 1
+                """, (recipe_id,))
+                
+                old_version = cur.fetchone()
+                
+                if old_version:
+                    current_version = old_version['version_number']
+                    old_data = dict(old_version)
+                    del old_data['version_number']
+                    
+                    # Get old ingredients
+                    cur.execute("""
+                        SELECT i.name, pvi.quantity, pvi.unit, pvi.preparation_notes
+                        FROM plate_version_ingredients pvi
+                        JOIN ingredients i ON pvi.ingredient_id = i.id
+                        JOIN plate_recipe_versions prv ON pvi.version_id = prv.id
+                        WHERE prv.recipe_id = %s AND prv.is_active = true
+                    """, (recipe_id,))
+                    old_ingredients = [dict(row) for row in cur.fetchall()]
+                    
+                    # Step 2: Get NEW recipe state (current state in main table)
+                    cur.execute("""
+                        SELECT 
+                            name, description, serves, category, cuisine,
+                            plating_instructions, garnish, presentation_notes,
+                            prep_time_minutes, cook_time_minutes, difficulty, notes
+                        FROM plate_recipes
+                        WHERE id = %s
+                    """, (recipe_id,))
+                    new_data = dict(cur.fetchone())
+                    
+                    # Get current ingredients (unchanged from main table)
+                    cur.execute("""
+                        SELECT i.name, pi.quantity, pi.unit, pi.preparation_notes
+                        FROM plate_ingredients pi
+                        JOIN ingredients i ON pi.ingredient_id = i.id
+                        WHERE pi.plate_recipe_id = %s
+                    """, (recipe_id,))
+                    new_ingredients = [dict(row) for row in cur.fetchall()]
+                    
+                    # Step 3: Detect what changed
+                    change_info = _detect_recipe_changes(
+                        old_data=old_data,
+                        new_data=new_data,
+                        old_ingredients=old_ingredients,
+                        new_ingredients=new_ingredients
+                    )
+                    
+                    # Step 4: Calculate next version number
+                    next_version = _calculate_next_version(
+                        current_version=current_version,
+                        change_type=change_info['change_type']
+                    )
+                    
+                    # Step 5: Deactivate old version
+                    cur.execute("""
+                        UPDATE plate_recipe_versions
+                        SET is_active = false
+                        WHERE recipe_id = %s AND is_active = true
+                    """, (recipe_id,))
+                    
+                    # Step 6: Create new version snapshot
+                    version_id = _create_recipe_version(
+                        cur=cur,
+                        recipe_id=str(recipe_id),
+                        recipe_type="plate",
+                        version_number=next_version,
+                        recipe_data=new_data,
+                        ingredients=new_ingredients,
+                        created_by=chef_id,
+                        change_summary=change_info['summary'],
+                        change_reason=f"Updated via update_recipe()"
+                    )
+                    
+                    conn.commit()
+                    logger.info(f"✅ Created version {next_version} for plate recipe '{new_data['name']}' (was v{current_version})")
+                    logger.info(f"📝 Changes: {change_info['summary']}")
+                    
+                else:
+                    # No previous version exists - create v1.0 as baseline
+                    logger.warning(f"No active version found for recipe {recipe_id}, creating v1.0")
+                    
+                    cur.execute("""
+                        SELECT 
+                            name, description, serves, category, cuisine,
+                            plating_instructions, garnish, presentation_notes,
+                            prep_time_minutes, cook_time_minutes, difficulty, notes
+                        FROM plate_recipes
+                        WHERE id = %s
+                    """, (recipe_id,))
+                    recipe_data = dict(cur.fetchone())
+                    
+                    cur.execute("""
+                        SELECT i.name, pi.quantity, pi.unit, pi.preparation_notes
+                        FROM plate_ingredients pi
+                        JOIN ingredients i ON pi.ingredient_id = i.id
+                        WHERE pi.plate_recipe_id = %s
+                    """, (recipe_id,))
+                    ingredients_data = [dict(row) for row in cur.fetchall()]
+                    
+                    version_id = _create_recipe_version(
+                        cur=cur,
+                        recipe_id=str(recipe_id),
+                        recipe_type="plate",
+                        version_number=1.0,
+                        recipe_data=recipe_data,
+                        ingredients=ingredients_data,
+                        created_by=chef_id,
+                        change_summary="Retroactive v1.0 creation during update",
+                        change_reason=None
+                    )
+                    
+                    conn.commit()
+                    logger.info(f"✅ Created retroactive version 1.0 for '{recipe_data['name']}'")
+            
+            # TODO: Add batch recipe versioning (similar logic)
+            # For now, batch recipes will skip versioning on update
+                
+        except Exception as version_error:
+            logger.error(f"⚠️ Failed to create new version during update: {version_error}")
+            # Don't rollback the main update - versioning failure shouldn't block recipe update
+            # The recipe update already succeeded and was committed
+        
+        # ==================== END VERSION CREATION ====================
+        
+        
         # Build success message
         changed_fields = []
         if new_name:

@@ -3,8 +3,8 @@
  * Professional Landing Page + Voice Interface
  */
 
-// Configuration
-const TOKEN_SERVER_URL = 'https://chef-voice-agent-production.up.railway.app/get-token';
+// Configuration - LOCAL DEVELOPMENT
+const TOKEN_SERVER_URL = 'http://localhost:5000/get-token';
 const LIVEKIT_URL = 'wss://chef-live-voice-agent-n6istvo9.livekit.cloud';
 
 // State
